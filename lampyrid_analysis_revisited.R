@@ -51,11 +51,18 @@ summary(as.factor(lampyrid$TREAT_DESC))
 
 lampyrid$TREAT_DESC<-gsub("Early succesional community", "Early successional", lampyrid$TREAT_DESC)
 lampyrid$TREAT_DESC<-gsub("Early sucessional community", "Early successional", lampyrid$TREAT_DESC)
+lampyrid$TREAT_DESC<-gsub("Early Successional Community", "Early successional", lampyrid$TREAT_DESC)
+lampyrid$TREAT_DESC<-gsub("Early successional community", "Early successional", lampyrid$TREAT_DESC)
 lampyrid$TREAT_DESC<-gsub("Succesional", "Successional", lampyrid$TREAT_DESC)
 lampyrid$TREAT_DESC<-gsub("Sucessional", "Successional", lampyrid$TREAT_DESC)
+lampyrid$TREAT_DESC<-gsub("poplar trees", "Poplar trees", lampyrid$TREAT_DESC)
 #also shorten biologically based (organic) and conventional till for plotting purposes 
 lampyrid$TREAT_DESC<-gsub("Biologically based \\(organic\\)", "Organic", lampyrid$TREAT_DESC)
 lampyrid$TREAT_DESC<-gsub("Conventional till", "Conventional", lampyrid$TREAT_DESC)
+
+#alfalfa plots T5 were switched(ha!) to switchgrass in 2017, so we're just going to call that treatment Forage
+lampyrid$TREAT_DESC<-gsub("Alfalfa", "Forage", lampyrid$TREAT_DESC)
+lampyrid$TREAT_DESC<-gsub("Switchgrass", "Forage", lampyrid$TREAT_DESC)
 
 #also convert this column to factor (gsub sometimes turns it into character type)
 lampyrid$TREAT_DESC<-as.factor(lampyrid$TREAT_DESC)
@@ -414,7 +421,7 @@ lampyrid.weather<-merge(lampyrid, weather_weekly, by=c("year","week"), all.x=TRU
 
 library(ggplot2)
 
-#create a palatte based on colour brewer. We want to use 'Spectral' for year data
+#create a palate based on colour brewer. We want to use 'Spectral' for year data
 #we're going to need to adjust given our number of years
 #just extract the hex from colorbrewer, and find an additional shade that works on one of the ends
 
@@ -457,19 +464,32 @@ lampyrid.week
 #summary data to do this
 
 
-captures.by.year<-summarize(lampyrid.weather, c("year"), 
-                        total=sum(ADULTS), traps=sum(TRAPS), avg=sum(ADULTS)/sum(TRAPS), ddacc=max(dd.accum))
+captures.by.year <- lampyrid.weather %>%
+  group_by(year) %>%
+  summarise(
+    total = sum(ADULTS, na.rm = TRUE),
+    traps = sum(TRAPS, na.rm = TRUE),
+    avg   = sum(ADULTS, na.rm = TRUE) / sum(TRAPS, na.rm = TRUE),
+    ddacc = max(dd.accum, na.rm = TRUE),
+    .groups = "drop"
+  )
 
-captures.by.week.year<-ddply(lampyrid.weather, c("year", "week"), summarise,
-                             total=sum(ADULTS), traps=sum(TRAPS), 
-                             avg=sum(ADULTS)/sum(TRAPS),
-                             ddacc=max(dd.accum), rain.days=max(rain.days))
+captures.by.week.year <- lampyrid.weather %>%
+  group_by(year, week) %>%
+  summarise(
+    total     = sum(ADULTS, na.rm = TRUE),
+    traps     = sum(TRAPS, na.rm = TRUE),
+    avg       = sum(ADULTS, na.rm = TRUE) / sum(TRAPS, na.rm = TRUE),
+    ddacc     = max(dd.accum, na.rm = TRUE),
+    rain.days = max(rain.days, na.rm = TRUE),
+    .groups = "drop"
+  )
 
 
 #look at captures by week, over the growing season, by year
 lampyrid.summary.week<-ggplot(captures.by.week.year, aes(week, avg, 
                                                          fill=as.factor(year)))+
-  scale_fill_manual(values=pal)+
+  #scale_fill_manual(values=pal)+
   geom_smooth(colour="black", se=FALSE)+
   geom_point(colour="black", pch=21, size=4)+
   theme_bw(base_size = 20)+
@@ -489,7 +509,7 @@ lampyrid.summary.week
 
 lampyrid.summary.ddacc<-ggplot(captures.by.week.year, aes(ddacc, avg, 
                                                           fill=as.factor(year)))+
-  scale_fill_manual(values=pal)+
+  #scale_fill_manual(values=pal)+
   geom_smooth(colour="black", se=FALSE)+
   geom_point(colour="black", pch=21, size=4)+
   theme_bw(base_size = 20)+
@@ -531,13 +551,19 @@ dev.off()
 #when we look at it by plant community (habitat), things get a little wackier because of the three year crop rotation. 
 #It looks like we get very good beahvior of the loess when we use TREAT_DESC
 
-captures.by.treatment<-ddply(lampyrid.weather, c("year", "TREAT_DESC"), summarise,
-                             total=sum(ADULTS), traps=sum(TRAPS), avg=sum(ADULTS)/sum(TRAPS))
+captures.by.treatment <- lampyrid.weather %>%
+  group_by(year, TREAT_DESC) %>%
+  summarise(
+    total = sum(ADULTS, na.rm = TRUE),
+    traps = sum(TRAPS, na.rm = TRUE),
+    avg   = sum(ADULTS, na.rm = TRUE) / sum(TRAPS, na.rm = TRUE),
+    .groups = "drop"
+  )
 
 # let's look at captures by treatment in the broadest sense first
 
 treatment.boxplot<-ggplot(captures.by.treatment, aes(factor(TREAT_DESC), avg))+
-  scale_fill_brewer(palette="Set3")+
+  #scale_fill_brewer(palette="Set3")+
   geom_boxplot(aes(fill=factor(TREAT_DESC)), colour="black")+
   theme_bw(base_size = 20)+
   guides(fill=FALSE)+
@@ -553,14 +579,14 @@ treatment.boxplot
 dev.off()
 
 #looks to me like we are most likely to capture fireflies in annual herbaceous crops with the least soil disturbance
-#alfalfa, and no till. Hmm.
+#forage, and no till. Hmm.
 
 
 #and now we look at captures by treatment over the years
 
 lampyrid.summary.treatment<-ggplot(captures.by.treatment, aes(year, avg, 
                                                               fill=as.factor(TREAT_DESC)))+
-  scale_fill_brewer(palette="Set3")+
+  #scale_fill_brewer(palette="Set3")+
   geom_smooth(colour="black", se=FALSE)+
   geom_point(colour="black", pch=21, size=4)+
   theme_bw(base_size = 20)+
@@ -583,14 +609,20 @@ dev.off()
 
 #we want to look at captures by treatment relative to degree day accumulation too- are peaks earlier or later by crop? 
 
-captures.by.treatment.dd<-ddply(lampyrid.weather, c("year","week","TREAT_DESC"), summarise,
-                             total=sum(ADULTS), traps=sum(TRAPS), avg=sum(ADULTS)/sum(TRAPS), ddacc=max(dd.accum))
-
+captures.by.treatment.dd <- lampyrid.weather %>%
+  group_by(year, week, TREAT_DESC) %>%
+  summarise(
+    total = sum(ADULTS, na.rm = TRUE),
+    traps = sum(TRAPS, na.rm = TRUE),
+    avg   = sum(ADULTS, na.rm = TRUE) / sum(TRAPS, na.rm = TRUE),
+    ddacc = max(dd.accum, na.rm = TRUE),
+    .groups = "drop"
+  )
 
 
 lampyrid.summary.treatment.dd<-ggplot(captures.by.treatment.dd, aes(ddacc, avg, 
                                                                     fill=as.factor(TREAT_DESC)))+
-  scale_fill_brewer(palette="Set3")+
+  #scale_fill_brewer(palette="Set3")+
   geom_point(colour="black", pch=21, size=4)+
   geom_smooth(colour="black", se=FALSE)+
   theme_bw(base_size = 20)+
@@ -613,13 +645,18 @@ lampyrid.summary.treatment.dd
 #that we saw above
 
 #compute yearly weather summary from weather data (do't want this calulation to be affectred by length of sampling season)
-weather.by.year<-ddply(weather1, c("year"), summarise,
-                        precip=sum(prec.accum), rain.days=sum(rain.days), ddacc=max(dd.accum))
-
+weather.by.year <- weather1 %>%
+  group_by(year) %>%
+  summarise(
+    precip    = sum(prec.accum, na.rm = TRUE),
+    rain.days = sum(rain.days, na.rm = TRUE),
+    ddacc     = max(dd.accum, na.rm = TRUE),
+    .groups = "drop"
+  )
 #plot degree day accumulations by year, see if that explains it
 
 ddacc.summary.year<-ggplot(weather.by.year, aes(x=as.factor(year), y=ddacc, fill=as.factor(year)))+
-  scale_fill_manual(values=pal)+
+  #scale_fill_manual(values=pal)+
   geom_bar(stat="identity", colour="black")+
   theme_bw(base_size = 20)+
   guides(fill=FALSE)+
@@ -636,7 +673,7 @@ ddacc.summary.year
 
 #what about amount of precipitation? say number of rainy days
 rainday.summary.year<-ggplot(weather.by.year, aes(x=as.factor(year), y=rain.days, fill=as.factor(year)))+
-  scale_fill_manual(values=pal)+
+  #scale_fill_manual(values=pal)+
   geom_bar(stat="identity", colour="black")+
   theme_bw(base_size = 20)+
   guides(fill=FALSE)+
@@ -653,7 +690,7 @@ rainday.summary.year
 
 #and total precipitation
 precip.summary.year<-ggplot(weather.by.year, aes(x=as.factor(year), y=precip, fill=as.factor(year)))+
-  scale_fill_manual(values=pal)+
+  #scale_fill_manual(values=pal)+
   geom_bar(stat="identity", colour="black")+
   theme_bw(base_size = 20)+
   guides(fill=FALSE)+
@@ -704,8 +741,15 @@ landscape.week$sums<-NULL
 #multivariate analysis
 #we already computed 'weather.by.year' but will need to also compute the same for 
 #our weekly analysis
-weather.by.week<-ddply(weather1, c("year", "week"), summarise,
-                       precip=max(prec.accum), rain.days=sum(rain.days), ddacc=max(dd.accum), precip.0=max(prec.accum.0))
+weather.by.week <- weather1 %>%
+  group_by(year, week) %>%
+  summarise(
+    precip    = max(prec.accum, na.rm = TRUE),
+    rain.days = sum(rain.days, na.rm = TRUE),
+    ddacc     = max(dd.accum, na.rm = TRUE),
+    precip.0  = max(prec.accum.0, na.rm = TRUE),
+    .groups = "drop"
+  )
 
 #now create the environmental matrix, preserving order from the community matricies by
 #creating them from the community matrix
@@ -857,7 +901,7 @@ model.performance.1<-melt(model.performance, id="number")
 #now we can do a two faceted plot to show this
 
 model.plot<-ggplot(model.performance.1, aes(number, value, fill=as.factor(variable)))+
-  scale_fill_manual(values=pal)+
+  #scale_fill_manual(values=pal)+
   geom_point(colour="black", pch=21, size=2)+
   theme_bw(base_size = 20)+
   ylim(0,50)+
@@ -874,18 +918,25 @@ dev.off()
 
 
 #Let's see how well the model works when we look at data with a lower resolution 
-#(to damp out a bit of sampling variability + make it comparable to our smothed plots from before)
+#(to damp out a bit of sampling variability + make it comparable to our smoothed plots from before)
 
-lampyrid.weather.summary<-ddply(lampyrid.weather, c("year", "week"), summarise,
-                             ADULTS=sum(ADULTS), TRAPS=sum(TRAPS), predicted=sum(predicted),
-                             avg=sum(ADULTS)/sum(TRAPS), avgpred=sum(predicted)/sum(TRAPS),
-                             dd.accum=max(dd.accum), rain.days=max(rain.days))
-
+lampyrid.weather.summary <- lampyrid.weather %>%
+  group_by(year, week) %>%
+  summarise(
+    ADULTS    = sum(ADULTS, na.rm = TRUE),
+    TRAPS     = sum(TRAPS, na.rm = TRUE),
+    predicted = sum(predicted, na.rm = TRUE),
+    avg       = sum(ADULTS, na.rm = TRUE) / sum(TRAPS, na.rm = TRUE),
+    avgpred   = sum(predicted, na.rm = TRUE) / sum(TRAPS, na.rm = TRUE),
+    dd.accum  = max(dd.accum, na.rm = TRUE),
+    rain.days = max(rain.days, na.rm = TRUE),
+    .groups = "drop"
+  )
 
 lampyrid.summary.ddacc.PRED<-ggplot(lampyrid.weather.summary, aes(dd.accum, avg, 
                                                      fill=factor(year)))+
   
-  scale_fill_manual(values=pal)+
+  #scale_fill_manual(values=pal)+
   geom_smooth(aes(dd.accum, avgpred), color="black", se=FALSE)+
   geom_point(colour="black", pch=21, size=4)+
   theme_bw(base_size = 20)+
@@ -916,14 +967,14 @@ ddcoef.err<-coef$"Std. Error"[2]
 dd2coef.err<-coef$"Std. Error"[3]
 
 #create a vector of years
-year<-(2004:2015)
+year<-(2004:2025)
 
 #create vector of coefficients
 #remember 2004 is the 'intercept' vector so it's unmodified, we'll give it a year 
 #modifier and error of zero
 
-yearcoef<-c(0, coef$Estimate[24:34])
-yearcoef.err<-c(0, coef$"Std. Error"[24:34])
+yearcoef<-c(0, coef$Estimate[34:54])
+yearcoef.err<-c(0, coef$"Std. Error"[34:54])
 
 #create a new data frame to integrate the coeficients with the year vector
 peaks<-as.data.frame(cbind(year, yearcoef, yearcoef.err))
@@ -940,7 +991,7 @@ peaks$peak.err<-sqrt((2*(dd2coef+yearcoef))^(-2) *ddcoef.err^2+
 #let's visualize this!
 
 peaks.year<-ggplot(peaks, aes(x=as.factor(year), y=peak, fill=as.factor(year)))+
-  scale_fill_manual(values=pal)+
+  #scale_fill_manual(values=pal)+
   geom_bar(stat="identity", colour="black")+
   geom_errorbar(aes(ymin=peak-peak.err, ymax=peak+peak.err))+
   theme_bw(base_size = 20)+
@@ -955,7 +1006,7 @@ pdf("figure6.pdf", height=6, width=8)
 peaks.year
 dev.off()
 
-#ok, now let's figure out which week each peak occured in
+#ok, now let's figure out which week each peak occurred in
 weeks<-c()
 for (i in 1:length(peaks$year)){
   #set an arbitrariliy high 'last week' dd caccumulation so the first condition is never
@@ -984,7 +1035,7 @@ peaks<-merge(peaks, weather.by.week, by=c("year", "week"), all.x=TRUE)
 
 
 dd.vs.precip<-ggplot(peaks, aes(precip.0, peak))+
-  scale_fill_manual(values=pal)+
+  #scale_fill_manual(values=pal)+
   geom_smooth(method="lm", formula=y~poly(x,2), se=FALSE, color="black")+
   geom_errorbar(aes(ymin=peak-peak.err, ymax=peak+peak.err))+
   geom_point(aes(fill=as.factor(year)), pch=21, color="black", size=4)+
