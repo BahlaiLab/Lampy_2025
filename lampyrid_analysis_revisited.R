@@ -129,7 +129,7 @@ weather$flag_air_temp_max<-NULL
 weather$flag_air_temp_min<-NULL
 
 #data after Aug 20, 2025 doesn't include daily max mins so let's cut that out
-weather<-subset(weather, weather$date<="2025-08-21")
+weather<-subset(weather, weather$date<="2025-09-29")
 
 #also, these data are sorted in descending order. It's easier to think of this 
 #stuff in ascending order, so let's sort the data by year and DOY
@@ -154,7 +154,7 @@ replace.missing<-function(vec){
   for (i in 1:(length(vec))){
     if (is.na(vec[i])){
       vec[i]<-mean(c(vec[i-1], vec[i+1]), na.rm=TRUE)
-      #if the data is missing, sub in the value from the measurement before
+      #if the data is missing, sub in the value from the measurement before averaged with the value after
       
     } else{
       #if the value is not missing, just pass it through to the result vector
