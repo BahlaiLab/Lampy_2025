@@ -79,6 +79,32 @@ lampyrid$STATION<-as.factor(lampyrid$STATION)
 #one more check to see if the data looks clean
 summary(lampyrid)
 
+#new! we're adding a variable to our dataset that lets us group the early study data
+
+#and the new survey data into 2 groups for comparative analysis
+#also a new variable to group data into 4 year chunks
+
+lampyrid$study<-ifelse(lampyrid$year<=2015, "Hermann","New")
+
+lampyrid$timechunk<-ifelse(lampyrid$year<=2007, "first", 
+                           ifelse(lampyrid$year>=2008&lampyrid$year<=2011, "second",
+                                  ifelse(lampyrid$year>=2012&lampyrid$year<=2015, "third",
+                                         ifelse((lampyrid$year>=2016&lampyrid$year<=2019), "fourth",
+                                                ifelse((lampyrid$year>=2020&lampyrid$year<=2023), "fifth",
+                                                       ifelse(lampyrid$year>=2024, "sixth", NA)
+                                                )))))
+
+#give these categories an order because they're alphabetical by default
+lampyrid$timechunk <- factor(lampyrid$timechunk,
+                           levels = c("first", "second", "third", "fourth", "fifth", "sixth"),
+                           ordered = TRUE)
+#also do TREAT_DESC while we're here
+lampyrid$TREAT_DESC <- factor(lampyrid$TREAT_DESC,
+                             levels = c("Conventional", "No till", "Reduced input", "Organic", "Forage", 
+                                        "Poplar trees", "Early successional", "Coniferous", "Deciduous", "Successional"),
+                             ordered = TRUE)
+
+
 #so we have a small issue with these data. The counts will be strongly zero-biased because we 
 # give each subsample its own observation. When it comes to modelling and plotting, we're going to
 #want to have the subsamples combined (summed), but because sometimes we lost traps (weather, accidental loss)
@@ -86,19 +112,23 @@ summary(lampyrid)
 #we will process our data set so that we've got our subsamples combined by plot date etc and create a vector with counts
 library(reshape2)
 #tell R where the data is by melting it, assigning IDs to the columns
-lampyrid1<-melt(lampyrid, id=c("DATE","TREAT_DESC","HABITAT","REPLICATE","STATION","newdate", "year", "DOY", "week"))
+lampyrid1<-melt(lampyrid, id=c("DATE","TREAT_DESC","HABITAT","REPLICATE","STATION","newdate", "year", "DOY", "week", "timechunk", "study"))
 #cast the data to count up the fireflies
-lampyrid2<-dcast(lampyrid1, year+DOY+week+TREAT_DESC+HABITAT+REPLICATE~., sum)
+lampyrid2<-dcast(lampyrid1, year+DOY+week+TREAT_DESC+HABITAT+REPLICATE+timechunk+study~., sum)
 #cast the data to count the traps
-lampyrid3<-dcast(lampyrid1, year+DOY+week+TREAT_DESC+HABITAT+REPLICATE~., length)
+lampyrid3<-dcast(lampyrid1, year+DOY+week+TREAT_DESC+HABITAT+REPLICATE+timechunk+study~., length)
 
 #let's rename these new vectors within the data frame
-names(lampyrid2)[7]<-"ADULTS"
-names(lampyrid3)[7]<-"TRAPS"
+names(lampyrid2)[9]<-"ADULTS"
+names(lampyrid3)[9]<-"TRAPS"
 
 #rename the data frame and combine the number of traps we counted into it from lampyrid3
 lampyrid<-lampyrid2
 lampyrid$TRAPS<-lampyrid3$TRAPS
+
+
+
+
 
 #download weather data from KBS weather station
 weather<-read.table(file="http://lter.kbs.msu.edu/datatables/7.csv",
@@ -425,19 +455,31 @@ library(ggplot2)
 #we're going to need to adjust given our number of years
 #just extract the hex from colorbrewer, and find an additional shade that works on one of the ends
 
-pal<-c('#a50026','#d73027','#f46d43','#fdae61','#fee090','#ffffbf','#e0f3f8','#abd9e9','#74add1','#4575b4','#313695', '#050561')
-pal1<-c('#9e0142','#d53e4f','#f46d43','#fdae61','#fee08b','#ffffbf','#e6f598','#abdda4','#66c2a5','#3288bd','#5e4fa2', '#a3297a')
+pal<-c('#f46d43', '#74add1')
+pal1<-c('#9e0142','#fdae61','#ffffbf','#66c2a5','#3288bd','#5e4fa2')
 
 #plot raw 
-lampyrid.doy<-ggplot(lampyrid.weather, aes(DOY, ADULTS, fill=as.factor(year)))+
-  #scale_fill_manual(values=pal)+
+lampyrid.doy<-ggplot(lampyrid.weather, aes(DOY, ADULTS, fill=as.factor(study)))+
+  scale_fill_manual(values=pal)+
   geom_point(colour="black", pch=21, size=4)+
   theme_bw(base_size = 20)+
-  facet_wrap(~year)+
+  facet_wrap(~study)+
   guides(fill=FALSE)+
   xlab("Day")+
   ylab("# Adults captured")
 lampyrid.doy
+
+#plot raw 
+lampyrid.doy.timechunk<-ggplot(lampyrid.weather, aes(DOY, ADULTS, fill=as.factor(timechunk)))+
+  scale_fill_manual(values=pal1)+
+  geom_point(colour="black", pch=21, size=4)+
+  theme_bw(base_size = 20)+
+  facet_wrap(~timechunk)+
+  guides(fill=FALSE)+
+  xlab("Day")+
+  ylab("# Adults captured")
+lampyrid.doy.timechunk
+
 
 #save to pdf
 #pdf("lampyriddoy.pdf", height=6, width=8)
@@ -445,15 +487,25 @@ lampyrid.doy
 #dev.off()
 
 #plot by sample week
-lampyrid.week<-ggplot(lampyrid.weather, aes(week, ADULTS, fill=factor(year)))+
-  #scale_fill_manual(values=pal)+
+lampyrid.week<-ggplot(lampyrid.weather, aes(week, ADULTS, fill=factor(study)))+
+  scale_fill_manual(values=pal)+
   geom_point(colour="black", pch=21, size=4)+
   theme_bw(base_size = 20)+
-  facet_wrap(~year)+
+  facet_wrap(~study)+
   guides(fill=FALSE)+
   xlab("Week")+
   ylab("# Adults captured")
 lampyrid.week
+
+lampyrid.week.timechunk<-ggplot(lampyrid.weather, aes(week, ADULTS, fill=factor(timechunk)))+
+  scale_fill_manual(values=pal1)+
+  geom_point(colour="black", pch=21, size=4)+
+  theme_bw(base_size = 20)+
+  facet_wrap(~timechunk)+
+  guides(fill=FALSE)+
+  xlab("Week")+
+  ylab("# Adults captured")
+lampyrid.week.timechunk
 
 #save to pdf
 #pdf("lampyridweek.pdf", height=6, width=8)
@@ -465,7 +517,7 @@ lampyrid.week
 
 
 captures.by.year <- lampyrid.weather %>%
-  group_by(year) %>%
+  group_by(year, timechunk, study) %>%
   summarise(
     total = sum(ADULTS, na.rm = TRUE),
     traps = sum(TRAPS, na.rm = TRUE),
@@ -475,7 +527,7 @@ captures.by.year <- lampyrid.weather %>%
   )
 
 captures.by.week.year <- lampyrid.weather %>%
-  group_by(year, week) %>%
+  group_by(year,timechunk, study, week) %>%
   summarise(
     total     = sum(ADULTS, na.rm = TRUE),
     traps     = sum(TRAPS, na.rm = TRUE),
@@ -488,17 +540,48 @@ captures.by.week.year <- lampyrid.weather %>%
 
 #look at captures by week, over the growing season, by year
 lampyrid.summary.week<-ggplot(captures.by.week.year, aes(week, avg, 
-                                                         fill=as.factor(year)))+
-  #scale_fill_manual(values=pal)+
-  geom_smooth(colour="black", se=FALSE)+
+                                                         fill=as.factor(study), color=as.factor(study)))+
+  scale_fill_manual(values=pal)+
+  scale_color_manual(values=pal)+
+  geom_smooth(se=FALSE, show.legend = FALSE)+
   geom_point(colour="black", pch=21, size=4)+
   theme_bw(base_size = 20)+
-  guides(fill=guide_legend(title="Year"))+
+  guides(fill=guide_legend(title="Study"))+
   theme(legend.key=element_blank())+
   xlab("\nWeek")+
   ylab("Adults per trap\n")
 
 lampyrid.summary.week
+
+#look at captures by week, over the growing season, by year
+lampyrid.summary.week<-ggplot(captures.by.week.year, aes(week, avg, 
+                                                         fill=as.factor(study), color=as.factor(study)))+
+  scale_fill_manual(values=pal)+
+  scale_color_manual(values=pal)+
+  geom_point(colour="black", pch=21, size=4)+
+  geom_smooth(se=FALSE, show.legend = FALSE)+
+  theme_bw(base_size = 20)+
+  guides(fill=guide_legend(title="Study"))+
+  theme(legend.key=element_blank())+
+  xlab("\nWeek")+
+  ylab("Adults per trap\n")
+
+lampyrid.summary.week
+
+lampyrid.summary.week.timechunk<-ggplot(captures.by.week.year, aes(week, avg, 
+                                                         fill=as.factor(timechunk), color=as.factor(timechunk)))+
+  scale_fill_manual(values=pal1)+
+  scale_color_manual(values=pal1)+
+  geom_point(colour="black", pch=21, size=4)+
+  geom_smooth(se=FALSE, show.legend = FALSE)+
+  theme_bw(base_size = 20)+
+  guides(fill=guide_legend(title="Time block"))+
+  theme(legend.key=element_blank())+
+  xlab("\nWeek")+
+  ylab("Adults per trap\n")
+
+lampyrid.summary.week.timechunk
+
 
 #save to pdf
 #pdf("lampyridsummaryweek.pdf", height=6, width=8)
@@ -508,17 +591,34 @@ lampyrid.summary.week
 #look at captures by degree day accumulation to see if our activity pattern is clearer
 
 lampyrid.summary.ddacc<-ggplot(captures.by.week.year, aes(ddacc, avg, 
-                                                          fill=as.factor(year)))+
-  #scale_fill_manual(values=pal)+
-  geom_smooth(colour="black", se=FALSE)+
+                                                          fill=as.factor(study), color=as.factor(study)))+
+  scale_fill_manual(values=pal)+
+  scale_color_manual(values=pal)+
   geom_point(colour="black", pch=21, size=4)+
+  geom_smooth( se=FALSE,  show.legend = FALSE)+
   theme_bw(base_size = 20)+
-  guides(fill=guide_legend(title="Year"))+
+  guides(fill=guide_legend(title="Study"))+
   theme(legend.key=element_blank())+
   xlab("\nDegree day accumulation")+
   ylab("Adults per trap\n")
 
 lampyrid.summary.ddacc
+
+
+lampyrid.summary.ddacc.timechunk<-ggplot(captures.by.week.year, aes(ddacc, avg, 
+                                                          fill=as.factor(timechunk), color=as.factor(timechunk)))+
+  scale_fill_manual(values=pal1)+
+  scale_color_manual(values=pal1)+
+  geom_point(colour="black", pch=21, size=4)+
+  geom_smooth( se=FALSE,  show.legend = FALSE)+
+  theme_bw(base_size = 20)+
+  guides(fill=guide_legend(title="Time block"))+
+  theme(legend.key=element_blank())+
+  xlab("\nDegree day accumulation")+
+  ylab("Adults per trap\n")
+
+lampyrid.summary.ddacc.timechunk
+
 
 #save to pdf
 #pdf("lampyridsummaryddacc.pdf", height=6, width=8)
@@ -538,12 +638,28 @@ lampyrid.summary.week1<-lampyrid.summary.week+guides(fill=FALSE)+
 lampyrid.summary.ddacc1<-lampyrid.summary.ddacc+ylab(NULL)+
   annotate("text", x=255, y=4.2, label="B", size=14)
 #stack it together
-grid.arrange(arrangeGrob(lampyrid.summary.week1, lampyrid.summary.ddacc1, ncol=2, widths=c(0.49, 0.55)))
+grid.arrange(arrangeGrob(lampyrid.summary.week1, lampyrid.summary.ddacc1, ncol=2, widths=c(0.49, 0.62)))
 
 
 #save to pdf
 pdf("figure4.pdf", height=6, width=10)
-grid.arrange(arrangeGrob(lampyrid.summary.week1, lampyrid.summary.ddacc1, ncol=2, widths=c(0.49, 0.55)))
+grid.arrange(arrangeGrob(lampyrid.summary.week1, lampyrid.summary.ddacc1, ncol=2, widths=c(0.49, 0.62)))
+dev.off()
+
+
+#remove legend from panel A, add label
+lampyrid.summary.week1.tc<-lampyrid.summary.week.timechunk+guides(fill=FALSE)+
+  annotate("text", x=20, y=4.2, label="A", size=14)
+#remove Y axis title from panel B, add label
+lampyrid.summary.ddacc1.tc<-lampyrid.summary.ddacc.timechunk+ylab(NULL)+
+  annotate("text", x=255, y=4.2, label="B", size=14)
+#stack it together
+grid.arrange(arrangeGrob(lampyrid.summary.week1.tc, lampyrid.summary.ddacc1.tc, ncol=2, widths=c(0.49, 0.62)))
+
+
+#save to pdf
+pdf("figure4tc.pdf", height=6, width=10)
+grid.arrange(arrangeGrob(lampyrid.summary.week1.tc, lampyrid.summary.ddacc1.tc, ncol=2, widths=c(0.49, 0.62)))
 dev.off()
 
 
@@ -552,7 +668,7 @@ dev.off()
 #It looks like we get very good beahvior of the loess when we use TREAT_DESC
 
 captures.by.treatment <- lampyrid.weather %>%
-  group_by(year, TREAT_DESC) %>%
+  group_by(year, timechunk, study, TREAT_DESC) %>%
   summarise(
     total = sum(ADULTS, na.rm = TRUE),
     traps = sum(TRAPS, na.rm = TRUE),
@@ -562,20 +678,37 @@ captures.by.treatment <- lampyrid.weather %>%
 
 # let's look at captures by treatment in the broadest sense first
 
-treatment.boxplot<-ggplot(captures.by.treatment, aes(factor(TREAT_DESC), avg))+
-  #scale_fill_brewer(palette="Set3")+
-  geom_boxplot(aes(fill=factor(TREAT_DESC)), colour="black")+
-  theme_bw(base_size = 20)+
-  guides(fill=FALSE)+
-  xlab("\nTreatment")+
-  ylab("Adults per trap\n")+
-  theme(axis.text.x=element_text(angle=90))
+treatment.boxplot <- ggplot(captures.by.treatment,
+                            aes(x = factor(TREAT_DESC), y = avg, fill = factor(study))) +
+  geom_boxplot(colour = "black", position = position_dodge(width = 0.8)) +
+  theme_bw(base_size = 20) +
+  xlab("\nTreatment") +
+  ylab("Adults per trap\n") +
+  theme(axis.text.x = element_text(angle = 90))+
+  guides(fill=guide_legend(title="Study"))
 
 treatment.boxplot
+
+treatment.boxplot.tc <- ggplot(captures.by.treatment,
+                            aes(x = factor(TREAT_DESC), y = avg, fill = factor(timechunk))) +
+  geom_boxplot(colour = "black", position = position_dodge(width = 0.8)) +
+  facet_wrap(~timechunk, ncol = 1) +
+  scale_fill_manual(values=pal1)+
+  theme_bw(base_size = 20) +
+  xlab("\nTreatment") +
+  ylab("Adults per trap\n") +
+  theme(axis.text.x = element_text(angle = 90))+
+  guides(fill=guide_legend(title="Time block"))
+  
+treatment.boxplot.tc
 
 #save to pdf
-pdf("figure1.pdf", height=6, width=8)
+pdf("figure1.pdf", height=5, width=10)
 treatment.boxplot
+dev.off()
+
+pdf("figure1tc.pdf", height=20, width=10)
+treatment.boxplot.tc
 dev.off()
 
 #looks to me like we are most likely to capture fireflies in annual herbaceous crops with the least soil disturbance
@@ -594,6 +727,7 @@ lampyrid.summary.treatment<-ggplot(captures.by.treatment, aes(year, avg,
   theme(legend.key=element_blank())+
   xlab("\nYear")+
   ylab("Adults per trap\n")
+  
 lampyrid.summary.treatment
 
 #save to pdf
@@ -610,7 +744,7 @@ dev.off()
 #we want to look at captures by treatment relative to degree day accumulation too- are peaks earlier or later by crop? 
 
 captures.by.treatment.dd <- lampyrid.weather %>%
-  group_by(year, week, TREAT_DESC) %>%
+  group_by(year, timechunk, study, week, TREAT_DESC) %>%
   summarise(
     total = sum(ADULTS, na.rm = TRUE),
     traps = sum(TRAPS, na.rm = TRUE),
@@ -726,13 +860,13 @@ plot(weather.by.year$precip,weather.by.year$ddacc)
 #per rep, we'll treat subsamples as rep for this analysis and pool by rep instead
 
 #cast at the yearly resolution first
-landscape.year<-dcast(lampyrid1, year+STATION~TREAT_DESC, sum)
-landscape.week<-dcast(lampyrid1, year+week+STATION~TREAT_DESC, sum)
+landscape.year<-dcast(lampyrid1, year+timechunk+study+STATION~TREAT_DESC, sum)
+landscape.week<-dcast(lampyrid1, year+timechunk+study+week+STATION~TREAT_DESC, sum)
 
 #there are some weeks where zero fireflies were captured. We need to remove these 
 #weeks from the matrix before we can continue-
 
-landscape.week$sums<-rowSums(landscape.week[4:13])
+landscape.week$sums<-rowSums(landscape.week[6:15])
 landscape.week<-landscape.week[which(landscape.week$sums>0),]
 landscape.week$sums<-NULL
 
@@ -754,16 +888,16 @@ weather.by.week <- weather1 %>%
 #now create the environmental matrix, preserving order from the community matricies by
 #creating them from the community matrix
 
-env.landscape.year<-landscape.year[,1:2]
-env.landscape.week<-landscape.week[,1:3]
+env.landscape.year<-landscape.year[,1:4]
+env.landscape.week<-landscape.week[,1:5]
 
 #we now need to pull our weather summary data into these matrices
 env.landscape.year<-merge(env.landscape.year, weather.by.year, by=c("year"), all.x=TRUE)
 env.landscape.week<-merge(env.landscape.week, weather.by.week, by=c("year", "week"), all.x=TRUE)
 
 #finally strip out the env data
-landscape.year<-landscape.year[,3:12]
-landscape.week<-landscape.week[,4:13]
+landscape.year<-landscape.year[,5:14]
+landscape.week<-landscape.week[,6:15]
 
 #Ok! data is ready for some NMDSing! WOOO
 library(vegan)
@@ -775,9 +909,9 @@ ord.year
 #environmental fit- are any environmental factors driving habitat use patterns? looks like rainy days
 #are the only significant factor
 
-fit.year<-envfit(ord.year~rain.days, env.landscape.year, perm=999)
-summary(fit.year)
-fit.year
+#fit.year<-envfit(ord.year~rain.days, env.landscape.year, perm=999)
+#summary(fit.year)
+#fit.year
 
 #so, MetaMDS assumes the x axis of our matrix is species and y is sites. We are
 #screwing with this by instead looking at sites over samples for one species. So when I call "sites"
@@ -785,12 +919,20 @@ fit.year
 
 par(mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
 plot(ord.year, disp='sites', type='n')
-with(env.landscape.year, points(ord.year, display = "sites", col = "black", pch = 21, bg = pal[as.factor(year)], cex=1.5))
-plot(fit.year, col="red")
+with(env.landscape.year, points(ord.year, display = "sites", col = "black", pch = 21, bg = pal[as.factor(study)], cex=1.5))
 ordilabel(ord.year, display="species", cex=0.75, col="black")
-with(env.landscape.year, legend("right", legend = levels(as.factor(year)),
+with(env.landscape.year, legend("right", legend = levels(as.factor(study)),
                                 bty = "n", col = "black", pch = 21, pt.bg = pal, 
-                                cex=1, pt.cex=1.5, inset=c(-0.2, 0), title="Year"))
+                                cex=1, pt.cex=1.5, inset=c(-0.2, 0), title="Study"))
+
+
+par(mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
+plot(ord.year, disp='sites', type='n')
+with(env.landscape.year, points(ord.year, display = "sites", col = "black", pch = 21, bg = pal1[as.factor(timechunk)], cex=1.5))
+ordilabel(ord.year, display="species", cex=0.75, col="black")
+with(env.landscape.year, legend("right", legend = levels(as.factor(timechunk)),
+                                bty = "n", col = "black", pch = 21, pt.bg = pal1, 
+                                cex=1, pt.cex=1.5, inset=c(-0.2, 0), title="Time block"))
 
 
 #save to pdf
@@ -808,22 +950,22 @@ with(env.landscape.year, legend("right", legend = levels(as.factor(year)),
 
 #repeat with week?
 
-ord.week<-metaMDS(landscape.week, autotransform=TRUE)
-ord.week
+#ord.week<-metaMDS(landscape.week, autotransform=TRUE)
+#ord.week
 
-#week and degree day accumulation are the only factors significantly associated with habitat use at the weekly resolution
-fit.week<-envfit(ord.week~week+ddacc, data=env.landscape.week, perm=999)
-summary(fit.week)
-fit.week
+##week and degree day accumulation are the only factors significantly associated with habitat use at the weekly resolution
+#fit.week<-envfit(ord.week~week+ddacc, data=env.landscape.week, perm=999)
+#summary(fit.week)
+#fit.week
 
-par(mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
-plot(ord.week, disp='sites', type='n')
-with(env.landscape.week, points(ord.week, display = "sites", col = "black", pch = 21, bg = pal[as.factor(year)], cex=0.8))
-plot(fit.week, col="red")
-ordilabel(ord.week, display="species", cex=0.75, col="black")
-with(env.landscape.week, legend("right", legend = levels(as.factor(year)),
-                                bty = "n", col = "black", pch = 21, pt.bg = pal, 
-                                cex=1, pt.cex=1.5, inset=c(-0.2, 0), title="Year"))
+#par(mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
+#plot(ord.week, disp='sites', type='n')
+#with(env.landscape.week, points(ord.week, display = "sites", col = "black", pch = 21, bg = pal[as.factor(year)], cex=0.8))
+#plot(fit.week, col="red")
+#ordilabel(ord.week, display="species", cex=0.75, col="black")
+#with(env.landscape.week, legend("right", legend = levels(as.factor(year)),
+#                                bty = "n", col = "black", pch = 21, pt.bg = pal, 
+#                                cex=1, pt.cex=1.5, inset=c(-0.2, 0), title="Year"))
 
 #save to pdf
 #pdf("NMDShabitatuseweek.pdf", height=6, width=8)
@@ -842,19 +984,20 @@ pdf("figure3.pdf", height=8, width=8)
 par(mfrow=c(2,1), mar=c(4.1, 4.8, 1.5, 8.1),xpd=TRUE) 
 
 plot(ord.year, disp='sites', type='n')
-with(env.landscape.year, points(ord.year, display = "sites", col = "black", pch = 21, bg = pal[as.factor(year)], cex=0.8))
-plot(fit.year, col="red")
+with(env.landscape.year, points(ord.year, display = "sites", col = "black", pch = 21, bg = pal[as.factor(study)], cex=1.5))
 ordilabel(ord.year, display="species", cex=0.75, col="black")
-with(env.landscape.year, legend("topright", legend = levels(as.factor(year)),
+with(env.landscape.year, legend("topright", legend = levels(as.factor(study)),
                                 bty = "n", col = "black", pch = 21, pt.bg = pal, 
-                                cex=1, pt.cex=1, inset=c(-0.2, 0), title="Year"))
-text(-0.8,0.25, "A", cex=2)
+                                cex=1, pt.cex=1.5, inset=c(-0.2, 0), title="Study"))
+text(-1,0.23, "A", cex=2)
 
-plot(ord.week, disp='sites', type='n')
-with(env.landscape.week, points(ord.week, display = "sites", col = "black", pch = 21, bg = pal[as.factor(year)], cex=0.8))
-plot(fit.week, col="red")
-ordilabel(ord.week, display="species", cex=0.75, col="black")
-text(-2.33,1.1, "B", cex=2)
+plot(ord.year, disp='sites', type='n')
+with(env.landscape.year, points(ord.year, display = "sites", col = "black", pch = 21, bg = pal1[as.factor(timechunk)], cex=1.5))
+ordilabel(ord.year, display="species", cex=0.75, col="black")
+with(env.landscape.year, legend("topright", legend = levels(as.factor(timechunk)),
+                                bty = "n", col = "black", pch = 21, pt.bg = pal1, 
+                                cex=1, pt.cex=1.5, inset=c(-0.2, 0), title="Time block"))
+text(-1,0.23, "B", cex=2)
 dev.off()
 
 #finally, let's do some generalized linear modelling to see what's important and if we can explain what's going on
