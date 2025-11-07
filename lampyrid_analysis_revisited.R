@@ -543,21 +543,6 @@ lampyrid.summary.week<-ggplot(captures.by.week.year, aes(week, avg,
                                                          fill=as.factor(study), color=as.factor(study)))+
   scale_fill_manual(values=pal)+
   scale_color_manual(values=pal)+
-  geom_smooth(se=FALSE, show.legend = FALSE)+
-  geom_point(colour="black", pch=21, size=4)+
-  theme_bw(base_size = 20)+
-  guides(fill=guide_legend(title="Study"))+
-  theme(legend.key=element_blank())+
-  xlab("\nWeek")+
-  ylab("Adults per trap\n")
-
-lampyrid.summary.week
-
-#look at captures by week, over the growing season, by year
-lampyrid.summary.week<-ggplot(captures.by.week.year, aes(week, avg, 
-                                                         fill=as.factor(study), color=as.factor(study)))+
-  scale_fill_manual(values=pal)+
-  scale_color_manual(values=pal)+
   geom_point(colour="black", pch=21, size=4)+
   geom_smooth(se=FALSE, show.legend = FALSE)+
   theme_bw(base_size = 20)+
@@ -567,6 +552,8 @@ lampyrid.summary.week<-ggplot(captures.by.week.year, aes(week, avg,
   ylab("Adults per trap\n")
 
 lampyrid.summary.week
+
+
 
 lampyrid.summary.week.timechunk<-ggplot(captures.by.week.year, aes(week, avg, 
                                                          fill=as.factor(timechunk), color=as.factor(timechunk)))+
@@ -574,7 +561,7 @@ lampyrid.summary.week.timechunk<-ggplot(captures.by.week.year, aes(week, avg,
   scale_color_manual(values=pal1)+
   geom_point(colour="black", pch=21, size=4)+
   geom_smooth(se=FALSE, show.legend = FALSE)+
-  theme_bw(base_size = 20)+
+    theme_bw(base_size = 20)+
   guides(fill=guide_legend(title="Time block"))+
   theme(legend.key=element_blank())+
   xlab("\nWeek")+
@@ -720,8 +707,8 @@ dev.off()
 lampyrid.summary.treatment<-ggplot(captures.by.treatment, aes(year, avg, 
                                                               fill=as.factor(TREAT_DESC)))+
   #scale_fill_brewer(palette="Set3")+
-  geom_smooth(colour="black", se=FALSE)+
   geom_point(colour="black", pch=21, size=4)+
+  geom_smooth(aes(year, avg, fill=NULL), colour="black", se=FALSE, method="gam")+
   theme_bw(base_size = 20)+
   guides(fill=guide_legend(title="Treatment"))+
   theme(legend.key=element_blank())+
