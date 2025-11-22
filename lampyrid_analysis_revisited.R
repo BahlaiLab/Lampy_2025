@@ -84,7 +84,8 @@ summary(lampyrid)
 #and the new survey data into 2 groups for comparative analysis
 #also a new variable to group data into 4 year chunks
 
-lampyrid$study<-ifelse(lampyrid$year<=2015, "Hermann","New")
+lampyrid$study<-as.factor(ifelse(lampyrid$year<=2015, "Hermann","New"))
+
 
 lampyrid$timechunk<-ifelse(lampyrid$year<=2007, "first", 
                            ifelse(lampyrid$year>=2008&lampyrid$year<=2011, "second",
@@ -98,6 +99,7 @@ lampyrid$timechunk<-ifelse(lampyrid$year<=2007, "first",
 lampyrid$timechunk <- factor(lampyrid$timechunk,
                            levels = c("first", "second", "third", "fourth", "fifth", "sixth"),
                            ordered = TRUE)
+lampyrid$timechunk<-as.factor(lampyrid$timechunk)
 #also do TREAT_DESC while we're here
 lampyrid$TREAT_DESC <- factor(lampyrid$TREAT_DESC,
                              levels = c("Conventional", "No till", "Reduced input", "Organic", "Forage", 
@@ -1188,22 +1190,461 @@ peaks$precip.02<-peaks$precip.0^2
 env.test<-glm(peak~precip.0+precip.02, data=peaks, family="gaussian")
 summary(env.test)
 
+######################
+# Begin GAM phenology analysis
 
-#create figure for LTER annual report
-#need lampyrid.summary.ddac as panel A and
-#dd.vs.precip as panel B
+#while we're at this, let's make some yearly summary data that will allow us to
+#characterize weather by year. Since it looks like seasonality plays a role in within-year 
+#partitioning (spoilers!) let's get some accumulations at key points in the season- let's do
+#week 25, 30, and 35 and get dd accum, precip accum for each year
 
-#add label to panel A, remove legend
-lampyrid.summary.ddacc2<-lampyrid.summary.ddacc+guides(fill=FALSE)+
-  annotate("text", x=75, y=4.2, label="A", size=12)
-#remove Y axis title from panel B, add label, and remove legend
-dd.vs.precip2<-dd.vs.precip+ylim(650,1000)+
-  annotate("text", x=255, y=987, label="B", size=12)
-#stack it together
-grid.arrange(arrangeGrob(lampyrid.summary.ddacc2, dd.vs.precip2, ncol=2, widths=c(0.45,0.55)))
+keypoints<-c(20, 25, 30, 35)
+
+weather_keypoints<-weather_weekly[which(weather_weekly$week  %in% keypoints),]
+
+#cull out the non-accumulated data
+
+weather_keypoints1<-weather_keypoints[,c(1:2, 6, 12)]
+
+#now we need to recast each of the response columns as their own unique responses by week
+#dd accum
+library(reshape2)
+dd.year<-dcast(weather_keypoints1, year~week,
+               value.var ="dd.accum",  sum)
+colnames(dd.year)<-c("year", "dd20", "dd25", "dd30", "dd35")
+#create metrics for DIFFERENCE from last time point too
+dd.year$dd25.dif<-dd.year$dd25-dd.year$dd20
+dd.year$dd30.dif<-dd.year$dd30-dd.year$dd25
+dd.year$dd35.dif<-dd.year$dd35-dd.year$dd30
+
+#precip
+precip.year<-dcast(weather_keypoints1, year~week,
+                   value.var ="yearly.precip.accum",  sum)
+
+colnames(precip.year)<-c("year", "precip20", "precip25", "precip30", "precip35")
+
+#create metrics for DIFFERENCE from last time point too
+precip.year$precip25.dif<-precip.year$precip25-precip.year$precip20
+precip.year$precip30.dif<-precip.year$precip30-precip.year$precip25
+precip.year$precip35.dif<-precip.year$precip35-precip.year$precip30
 
 
-#save to pdf
-#pdf("annualreport2016.pdf", height=5, width=12)
-#grid.arrange(arrangeGrob(lampyrid.summary.ddacc2, dd.vs.precip2, ncol=2, widths=c(0.45,0.55)))
-#dev.off()
+
+
+# let's rough in our gam models. Just like with the multivariate analysis, we'll look at
+#two different scales- within year dynamics and between year dynamics
+library(mgcv)
+library(visreg)
+library(ggpubr)
+library(Hmisc)
+library(cowplot)
+
+#pearson correlation of environmental parameters
+
+round(cor(lampyrid.weather[11:22], method="pearson"), digits=2)
+#start withe the drivers of within-year variation
+
+
+
+
+##################### Lampy gam
+
+
+#by study
+gam_lampy<-gam(ADULTS~s(dd.accum, sp=1, by= study)+
+                 s(week, sp=1, by=study)+
+                    s(weekly.precip, sp=1, by=study)+
+                    s(max.temp, sp=1, by=study)+
+                    s(min.temp, sp=1, by=study)+ 
+                    TREAT_DESC*study+
+                    #s(year, sp=1)+
+                    offset(log(TRAPS)), method="REML", data=lampyrid.weather, family="quasipoisson")
+summary(gam_lampy)
+anova(gam_lampy) #significance of parametric terms
+
+
+# #check concurvity
+# concurvity(gam_lampy)
+# #looks fine, sweet!
+# gam.check(gam_lampy)
+
+
+withinyear.dd.lampy<-visreg(gam_lampy, "dd.accum", "study", partial=F, rug=FALSE, 
+                            overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal) +
+  labs(x="Degree day accumulation", y="")+
+  theme_classic()+ theme(legend.position = "none")+
+  coord_cartesian(xlim = c(250, 1200), ylim=c(0, 20))
+
+withinyear.dd.lampy
+
+withinyear.week.lampy<-visreg(gam_lampy, "week", "study", partial=F, rug=FALSE, 
+                            overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal) +
+  labs(x="Week of year", y="")+
+  theme_classic()+ theme(legend.position = "none")+
+  coord_cartesian(xlim = c(22, 35), ylim=c(0, 20))
+
+withinyear.week.lampy
+
+withinyear.maxt.lampy<-visreg(gam_lampy, "max.temp", "study", partial=F, rug=FALSE, 
+                              overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal) +
+  labs(x="Maximum temperature", y="")+
+  theme_classic()+ theme(legend.position = "none")+
+  coord_cartesian(xlim = c(25, 35), ylim=c(0, 20))
+
+withinyear.maxt.lampy
+
+withinyear.mint.lampy<-visreg(gam_lampy, "min.temp", "study", partial=F, rug=FALSE, 
+                              overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal) +
+  labs(x="Minimum temperature", y="")+
+  theme_classic()+ theme(legend.position = "none")+
+  coord_cartesian(xlim = c(11, 19), ylim=c(0, 20))
+
+withinyear.mint.lampy
+
+withinyear.precip.lampy<-visreg(gam_lampy, "weekly.precip", "study", partial=F, rug=FALSE, 
+                              overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal) +
+  labs(x="Weekly precipitation", y="")+
+  theme_classic()+ theme(legend.position = "none")+
+  coord_cartesian(xlim = c(0, 30), ylim=c(0, 20))
+
+withinyear.precip.lampy
+
+withinyear.habitat.lampy<-visreg(gam_lampy, "TREAT_DESC", "study", partial=F, rug=FALSE, 
+                                overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal) +
+  labs(x="\nTreatment", y="")+
+  theme_classic()+ theme(axis.text.x = element_text(angle = 90), legend.position = "none")+
+  coord_cartesian(ylim=c(0, 20))
+
+
+withinyear.habitat.lampy
+
+#create a legend to pull
+withinyear.dd.lampy.leg <- withinyear.dd.lampy +
+  theme(legend.position = "right")+
+  guides(fill = guide_legend(title = "Time block"),
+         color = guide_legend(title = "Time block"))
+legend_lampy <- get_legend(withinyear.dd.lampy.leg)
+
+
+#plot the withinyear model all together:
+
+withinyear.modelplot.lampy<-plot_grid(withinyear.dd.lampy,withinyear.week.lampy,  
+                                      withinyear.mint.lampy, withinyear.maxt.lampy, 
+                                      withinyear.precip.lampy, withinyear.habitat.lampy,
+                                      ncol=1, rel_heights = c(1, 1, 1, 1, 1, 2), labels=c('A', 'B', 'C', 'D', 'E', 'F'), align="v")
+withinyear.modelplot.lampy
+
+#create overall y axis label
+partresid<-text_grob(paste("        Partial residual captures"), color="black", size=12, rot=90)
+
+
+#now replot with grob label
+withinyear.plot.lampy<-plot_grid(partresid, withinyear.modelplot.lampy, ncol=2, rel_widths = c(1,11))
+
+withinyear.plot.lampy
+
+
+final_plot <- plot_grid(withinyear.plot.lampy,
+                          legend_lampy,  ncol = 2,
+                          rel_widths = c(12, 4))
+
+final_plot
+
+
+pdf("figurewithinyeargamlampybystudy.pdf", height=10, width=6)
+final_plot
+dev.off()
+###
+
+#Repeat the gam model with timechunk instead of study
+
+
+
+
+#by timechunk
+gam_lampy.t<-gam(ADULTS ~
+    s(dd.accum, by=factor(timechunk, ordered=FALSE), sp=1)+
+    s(week, by=factor(timechunk, ordered=FALSE), sp=1) +
+    s(weekly.precip, by=factor(timechunk, ordered=FALSE), sp=1, k=4) +
+    s(max.temp, by=factor(timechunk, ordered=FALSE), sp=1, k=4) +
+    s(min.temp, by=factor(timechunk, ordered=FALSE), sp=1, k=4) +
+    TREAT_DESC * factor(timechunk, ordered=FALSE) +
+    offset(log(TRAPS)),
+  method = "REML",
+  data = lampyrid.weather,
+  family = quasipoisson
+)
+
+
+
+summary(gam_lampy.t)
+anova(gam_lampy.t) #significance of parametric terms
+
+
+
+# #check concurvity
+# concurvity(gam_lampy.t)
+# #looks fine, sweet!
+# gam.check(gam_lampy.t)
+
+
+withinyear.dd.lampy.t<-visreg(gam_lampy.t, "dd.accum", "timechunk", partial=F, rug=FALSE,
+                              overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal1) +
+  scale_fill_manual(values = alpha(pal1,0.2)) +
+  labs(x="Degree day accumulation", y="")+
+  theme_classic()+ theme(legend.position = "none")+
+  coord_cartesian(xlim = c(250, 1200), ylim=c(0, 20))
+
+withinyear.dd.lampy.t
+
+withinyear.week.lampy.t<-visreg(gam_lampy.t, "week", "timechunk", partial=F, rug=FALSE, 
+                                overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal1) +
+  scale_fill_manual(values = alpha(pal1,0.2)) +
+  labs(x="Week of year", y="")+
+  theme_classic()+ theme(legend.position = "none")+
+  coord_cartesian(xlim = c(22, 35), ylim=c(0, 20))
+
+withinyear.week.lampy.t
+
+withinyear.maxt.lampy.t<-visreg(gam_lampy.t, "max.temp", "timechunk", partial=F, rug=FALSE,
+                                overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal1) +
+  scale_fill_manual(values = alpha(pal1,0.2)) +
+  labs(x="Maximum temperature", y="")+
+  theme_classic()+ theme(legend.position = "none")+
+  coord_cartesian(xlim = c(25, 35), ylim=c(0, 20))
+
+withinyear.maxt.lampy.t
+
+withinyear.mint.lampy.t<-visreg(gam_lampy.t, "min.temp", "timechunk", partial=F, rug=FALSE,
+                                overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal1) +
+  scale_fill_manual(values = alpha(pal1,0.2)) +
+  labs(x="Minimum temperature", y="")+
+  theme_classic()+ theme(legend.position = "none")+
+  coord_cartesian(xlim = c(11, 19), ylim=c(0, 20))
+
+withinyear.mint.lampy.t
+
+withinyear.precip.lampy.t<-visreg(gam_lampy.t, "weekly.precip", "timechunk", partial=F, rug=FALSE, 
+                                  overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal1) +
+  scale_fill_manual(values = alpha(pal1,0.2)) +
+  labs(x="Weekly precipitation", y="")+
+  theme_classic()+ theme(legend.position = "none")+
+  coord_cartesian(xlim = c(0, 30), ylim=c(0, 20))
+
+withinyear.precip.lampy.t
+
+withinyear.habitat.lampy.t<-visreg(gam_lampy.t, "TREAT_DESC", "timechunk", partial=F, rug=FALSE,
+                                   overlay=T, scale="response", gg=TRUE)+
+  scale_colour_manual(values = pal1) +
+  scale_fill_manual(values = alpha(pal1,0.2)) +
+  labs(x="\nTreatment", y="")+
+  theme_classic()+ theme(axis.text.x = element_text(angle = 90), legend.position = "none")+
+  coord_cartesian(ylim=c(0, 20))
+
+
+withinyear.habitat.lampy.t
+
+#create a legend to pull
+withinyear.dd.lampy.t.leg <- withinyear.dd.lampy.t +
+  theme(legend.position = "right")+
+  guides(fill = guide_legend(title = "Time block"),
+         color = guide_legend(title = "Time block"))
+legend_lampyt <- get_legend(withinyear.dd.lampy.t.leg)
+
+
+#plot the withinyear.t model all together:
+
+withinyear.modelplot.lampy.t<-plot_grid(withinyear.dd.lampy.t,withinyear.week.lampy.t,  
+                                        withinyear.mint.lampy.t, withinyear.maxt.lampy.t, 
+                                        withinyear.precip.lampy.t, withinyear.habitat.lampy.t,
+                                        ncol=1, rel_heights = c(1, 1, 1, 1, 1, 2), labels=c('A', 'B', 'C', 'D', 'E', 'F'), align="v")
+withinyear.modelplot.lampy.t
+
+#create overall y axis label
+partresid<-text_grob(paste("        Partial residual captures"), color="black", size=12, rot=90)
+
+
+#now replot with grob label
+withinyear.plot.lampy.t<-plot_grid(partresid, withinyear.modelplot.lampy.t, ncol=2, rel_widths = c(1,11))
+
+final_plot.t <- plot_grid(withinyear.plot.lampy.t,
+  legend_lampyt,  ncol = 2,
+  rel_widths = c(12, 4))
+
+final_plot.t
+
+
+
+pdf("figurewithinyeargamlampybytimechunk.pdf", height=10, width=6)
+final_plot.t
+dev.off()
+
+
+#we'll want to extract the data associated with activity peaks
+
+#ok, I think we found the method we should use! here's the tutorial:
+# https://fromthebottomoftheheap.net/2014/05/15/identifying-periods-of-change-with-gams/
+
+#first we create a new dataframe that we can use our model to predict the values for optima
+#we use good guesses at values for other optima to create conditions where species is reasonably abundant for modelled parameter 
+
+#create data for abipn, holding everything constant but degree days
+newData.abipn.dd <- with(lb_all.abipn,
+                         data.frame(yearly.dd.accum = seq(0, 1500, length = 300),#use natural range of data
+                                    TRAPS=5, 
+                                    year=1990, #select year when this species is most abundant- 1990
+                                    weekly.precip=0, # species likes it dry
+                                    max.temp=26, #species maxes near 26
+                                    min.temp=12, #species maxes near 12
+                                    SPID="ABIPN", 
+                                    HABITAT="coniferous")) #species likes conifers best
+
+#make the same frame but for 1 more degday
+newData.abipn.1.dd<- with(lb_all.abipn,
+                          data.frame(yearly.dd.accum = seq(1, 1501, length = 300), #use natural range of data
+                                     TRAPS=5, 
+                                     year=1990, #select year when this species is most abundant- 1990
+                                     weekly.precip=0, # species likes it dry
+                                     max.temp=26, #species maxes near 26
+                                     min.temp=12, #species maxes near 12
+                                     SPID="ABIPN", 
+                                     HABITAT="coniferous")) #species likes conifers best
+
+#make predictions
+predict.dd.abipn<-predict(gam_lb.abipn, newData.abipn.dd, type="link")
+predict.dd.abipn.1<-predict(gam_lb.abipn, newData.abipn.1.dd, type="link")
+
+dd.abipn.der<-as.data.frame(cbind(newData.abipn.dd$yearly.dd.accum, predict.dd.abipn, predict.dd.abipn.1))
+dd.abipn.der$slope<-(dd.abipn.der$predict.dd.abipn.1-dd.abipn.der$predict.dd.abipn)/1
+
+#slope approaches zero at 356 and 1118 degree days (we look for places where the slope changes from negative to positive or vice versa)- 
+#note dd is not significant in the model but data suggests two adult activity peaks- 2 generations per year
+
+#create data for abipn, holding everything constant but minimum temperature
+newData.abipn.mint <- with(lb_all.abipn,
+                           data.frame(yearly.dd.accum = 1118,
+                                      TRAPS=5, 
+                                      year=1990, #select year when this species is most abundant- 1990
+                                      weekly.precip=0, # species likes it dry
+                                      max.temp=26, #species maxes near 26
+                                      min.temp= seq(-5, 18, length = 300), #use natural range of data
+                                      SPID="ABIPN", 
+                                      HABITAT="coniferous")) #species likes conifers best
+
+#make the same frame but for 0.2 more degrees celcius
+newData.abipn.1.mint<- with(lb_all.abipn,
+                            data.frame(yearly.dd.accum = 1118,
+                                       TRAPS=5, 
+                                       year=1990, #select year when this species is most abundant- 1990
+                                       weekly.precip=0, # species likes it dry
+                                       max.temp=26, #species maxes near 26
+                                       min.temp=seq(-4.8, 18.2, length = 300), #use natural range of data
+                                       SPID="ABIPN", 
+                                       HABITAT="coniferous")) #species likes conifers best
+
+#make predictions
+predict.mint.abipn<-predict(gam_lb.abipn, newData.abipn.mint, type="link")
+predict.mint.abipn.1<-predict(gam_lb.abipn, newData.abipn.1.mint, type="link")
+
+mint.abipn.der<-as.data.frame(cbind(newData.abipn.mint$min.temp, predict.mint.abipn, predict.mint.abipn.1))
+mint.abipn.der$slope<-(mint.abipn.der$predict.mint.abipn.1-mint.abipn.der$predict.mint.abipn)/1
+
+
+#slope approaches zero at minimum temperature of 10.5 C
+#significant factor in the model
+
+
+#create data for abipn, holding everything constant but maximum temperature
+newData.abipn.maxt <- with(lb_all.abipn,
+                           data.frame(yearly.dd.accum = 1118,
+                                      TRAPS=5, 
+                                      year=1990, #select year when this species is most abundant- 1990
+                                      weekly.precip=0, # species likes it dry
+                                      max.temp=seq(18, 40, length = 300), #use natural range of data
+                                      min.temp= 12, #species maxes near 12
+                                      SPID="ABIPN", 
+                                      HABITAT="coniferous")) #species likes conifers best
+
+#make the same frame but for 0.2 more degrees celcius
+newData.abipn.1.maxt<- with(lb_all.abipn,
+                            data.frame(yearly.dd.accum = 1118,
+                                       TRAPS=5, 
+                                       year=1990, #select year when this species is most abundant- 1990
+                                       weekly.precip=0, # species likes it dry
+                                       max.temp=seq(18.2, 40.2, length = 300), #use natural range of data
+                                       min.temp= 12, #species maxes near 12
+                                       SPID="ABIPN", 
+                                       HABITAT="coniferous")) #species likes conifers best
+
+#make predictions
+predict.maxt.abipn<-predict(gam_lb.abipn, newData.abipn.maxt, type="link")
+predict.maxt.abipn.1<-predict(gam_lb.abipn, newData.abipn.1.maxt, type="link")
+
+maxt.abipn.der<-as.data.frame(cbind(newData.abipn.maxt$max.temp, predict.maxt.abipn, predict.maxt.abipn.1))
+maxt.abipn.der$slope<-(maxt.abipn.der$predict.maxt.abipn.1-maxt.abipn.der$predict.maxt.abipn)/1
+
+
+#slope approaches zero at minimum temperature of 26.2 C
+#significant factor in the model
+
+
+#create data for abipn, holding everything constant but precipitation
+newData.abipn.precip <- with(lb_all.abipn,
+                             data.frame(yearly.dd.accum = 1118,
+                                        TRAPS=5, 
+                                        year=1990, #select year when this species is most abundant- 1990
+                                        weekly.precip=seq(0, 150, length = 300), #use natural range of data
+                                        max.temp=26, #species maxes near 26
+                                        min.temp= 12, #species maxes near 12
+                                        SPID="ABIPN", 
+                                        HABITAT="coniferous")) #species likes conifers best
+
+#make the same frame but for 0.2 more degrees celcius
+newData.abipn.1.precip<- with(lb_all.abipn,
+                              data.frame(yearly.dd.accum = 1118,
+                                         TRAPS=5, 
+                                         year=1990, #select year when this species is most abundant- 1990
+                                         weekly.precip=seq(1, 151, length = 300), #use natural range of data
+                                         max.temp=26, #species maxes near 26
+                                         min.temp= 12, #species maxes near 12
+                                         SPID="ABIPN", 
+                                         HABITAT="coniferous")) #species likes conifers best
+
+#make predictions
+predict.precip.abipn<-predict(gam_lb.abipn, newData.abipn.precip, type="link")
+predict.precip.abipn.1<-predict(gam_lb.abipn, newData.abipn.1.precip, type="link")
+
+precip.abipn.der<-as.data.frame(cbind(newData.abipn.precip$weekly.precip, predict.precip.abipn, predict.precip.abipn.1))
+precip.abipn.der$slope<-(precip.abipn.der$predict.precip.abipn.1-precip.abipn.der$predict.precip.abipn)/1
+
+#this species peaks at zero- no rain
+#significant factor in model
+
+
+#ok, now let's predict the mean captures for each habitat, given peak abundance in other parameters 
+
+newData.abipn.habitat<- with(lb_all.abipn,
+                             data.frame(yearly.dd.accum = 1118,
+                                        TRAPS=5, 
+                                        year=1990, #select year when this species is most abundant- 1990
+                                        weekly.precip=0, # species likes it dry
+                                        max.temp=26, #species maxes near 26
+                                        min.temp= 12, #species maxes near 12
+                                        SPID="ABIPN", 
+                                        HABITAT=c("poplar", "coniferous")))#just literally list each habitat of interest, probably the peak ones
+predict(gam_lb.abipn, newData.abipn.habitat, type="link")
+
+
+#poplar 0.57, coniferous 0.67
+
