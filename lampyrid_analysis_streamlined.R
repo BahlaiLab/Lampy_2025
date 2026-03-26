@@ -1,5 +1,5 @@
 # lampyrid analysis
-#bring data in from figshare
+#bring data in 
 lampyrid<-read.csv(file="data/LTER_lampyrid_data_20042025.csv",
                    header=T)
 
@@ -31,10 +31,6 @@ lampyrid$DOY<-yday(lampyrid$newdate)
 #samples taken within a sampling week would get grouped incorrectly when we go to do the analysis.
 lampyrid$week<-isoweek(lampyrid$newdate)
 
-#let's look for the data problems we found we used OpenRefine and see if
-#we can implement our cleaning operations here- that way we have a complete
-#record of EVERYTHING that happened to these data. Recall there were issues 
-#with TREAT_DESC
 #let's look at these columns individually and fix errors as we find them
 #and we should also check for weirdness in our numeric values
 
@@ -476,9 +472,9 @@ lampyrid.summary.week<-ggplot(captures.by.week.year, aes(week, avg,
                                                          fill=as.factor(study), color=as.factor(study)))+
   scale_fill_manual(values=pal)+
   scale_color_manual(values=pal)+
-  geom_point(colour="black", pch=21, size=4)+
+  geom_point(colour="black", pch=21, size=2)+
   geom_smooth(se=FALSE, show.legend = FALSE)+
-  theme_bw(base_size = 20)+
+  theme_bw(base_size = 15)+
   guides(fill=guide_legend(title="Study"))+
   theme(legend.key=element_blank())+
   xlab("\nWeek")+
@@ -493,9 +489,9 @@ lampyrid.summary.ddacc<-ggplot(captures.by.week.year, aes(ddacc, avg,
                                                           fill=as.factor(study), color=as.factor(study)))+
   scale_fill_manual(values=pal)+
   scale_color_manual(values=pal)+
-  geom_point(colour="black", pch=21, size=4)+
+  geom_point(colour="black", pch=21, size=2)+
   geom_smooth( se=FALSE,  show.legend = FALSE)+
-  theme_bw(base_size = 20)+
+  theme_bw(base_size = 15)+
   guides(fill=guide_legend(title="Study"))+
   theme(legend.key=element_blank())+
   xlab("\nDegree day accumulation")+
@@ -543,188 +539,80 @@ captures.by.treatment <- lampyrid.weather %>%
 
 #captures by treatment over the years
 
-lampyrid.summary.treatment<-ggplot(captures.by.treatment, aes(year, avg, 
-                                                              fill=as.factor(TREAT_DESC)))+
-  #scale_fill_brewer(palette="Set3")+
-  geom_point(colour="black", pch=21, size=4)+
-  geom_smooth(aes(year, avg, fill=NULL), colour="black", se=FALSE, method="gam")+
-  geom_smooth(aes(year, avg, fill=NULL), colour="red", se=FALSE, method="lm")+
-  theme_bw(base_size = 20)+
-  guides(fill=guide_legend(title="Treatment"))+
+# first we estimate the slope (+% decline for each of the study periods:
+hermann <- subset(captures.by.treatment, year <= 2015)
+new <- subset(captures.by.treatment, year > 2015)
+
+#fit SLRs
+
+mod_hermann <- lm(avg ~ year, data = hermann)
+mod_new <- lm(avg ~ year, data = new)
+mod_all<-lm(avg ~ year, data = captures.by.treatment)
+summary(mod_hermann)
+summary(mod_new)
+summary(mod_all)
+
+#% change
+start_val <- predict(mod_all, newdata = data.frame(year = min(captures.by.treatment$year)))
+end_val   <- predict(mod_all, newdata = data.frame(year = max(captures.by.treatment$year)))
+
+percent_change <- 100 * (end_val - start_val) / start_val
+percent_change
+
+
+lampyrid.summary.timeseries<-ggplot(captures.by.treatment, aes(year, avg))+
+  geom_point(aes(fill=as.factor(study)), colour="black", pch=21, size=2, 
+             position = position_jitter(width = 0.1, height = 0))+
+  geom_smooth(method = "gam",
+              colour = "grey70",
+              linetype = "twodash",
+              linewidth = 1,
+              se = FALSE,
+              show.legend = FALSE) +
+  geom_smooth(method = "lm",
+              colour = "black",
+              linewidth = 1.5,
+              se = FALSE,
+              show.legend = FALSE)+
+  scale_fill_manual(values = pal)+
+  theme_classic(base_size = 13)+
+  guides(fill=guide_legend(title="Study"))+
   theme(legend.key=element_blank())+
   xlab("\nYear")+
   ylab("Adults per trap\n")
   
-lampyrid.summary.treatment
+lampyrid.summary.timeseries
 
 #save to pdf
-pdf("figure2.pdf", height=6, width=8)
-lampyrid.summary.treatment
+pdf("Figure3.pdf", height=5, width=7)
+lampyrid.summary.timeseries
 dev.off()
 
-#an interesting population cycling pattern emerges, but it doesn't look like there's major changes of crop use
-#At least not at the yearly resolution
-#we can investigate this futher with a multivariate analysis later
+#an interesting population cycling pattern emerges 
 #regardless of how we plot it, we see an interesting pattern in the population variation- basically, a 6-7 year oscillation.
-#so the question is, is there and obvious environmental cause?
-
-#we want to look at captures by treatment relative to degree day accumulation too- are peaks earlier or later by crop? 
-
-captures.by.treatment.dd <- lampyrid.weather %>%
-  group_by(year, study, week, TREAT_DESC) %>%
-  summarise(
-    total = sum(ADULTS, na.rm = TRUE),
-    traps = sum(TRAPS, na.rm = TRUE),
-    avg   = sum(ADULTS, na.rm = TRUE) / sum(TRAPS, na.rm = TRUE),
-    ddacc = max(dd.accum, na.rm = TRUE),
-    .groups = "drop"
-  )
 
 
-lampyrid.summary.treatment.dd<-ggplot(captures.by.treatment.dd, aes(ddacc, avg, 
-                                                                    fill=as.factor(TREAT_DESC)))+
-  #scale_fill_brewer(palette="Set3")+
-  geom_point(colour="black", pch=21, size=4)+
-  geom_smooth(colour="black", se=FALSE)+
-  theme_bw(base_size = 20)+
-  guides(fill=guide_legend(title="Treatment"))+
-  theme(legend.key=element_blank())+
-  xlab("\nDegree day accumulation")+
-  ylab("Adults per trap\n")
-lampyrid.summary.treatment.dd
-
-#save to pdf
-#pdf("lampyridsummarytreatmentdd.pdf", height=6, width=8)
-#lampyrid.summary.treatment.dd
-#dev.off()
-
-#it looks like peaks by degree day accumulation is roughly synced by crop. We'll need to quantify how crop 
-#use varies between crops but it looks like these factors do not interact with time. Good! makes our analysis
-#more strightforward
-
-#Let's see if there's anyting obvious in the weather data that explains the population cycling over time 
-#that we saw above
-
-#compute yearly weather summary from weather data (do't want this calulation to be affectred by length of sampling season)
-weather.by.year <- weather1 %>%
-  group_by(year) %>%
-  summarise(
-    precip    = sum(prec.accum, na.rm = TRUE),
-    rain.days = sum(rain.days, na.rm = TRUE),
-    ddacc     = max(dd.accum, na.rm = TRUE),
-    .groups = "drop"
-  )
-#plot degree day accumulations by year, see if that explains it
-
-ddacc.summary.year<-ggplot(weather.by.year, aes(x=as.factor(year), y=ddacc, fill=as.factor(year)))+
-  #scale_fill_manual(values=pal)+
-  geom_bar(stat="identity", colour="black")+
-  theme_bw(base_size = 20)+
-  guides(fill=FALSE)+
-  ylab("\nDegree day accumulation\n")+
-  xlab("\nYear\n")+
-  theme(axis.text.x=element_text(angle=90))
-
-ddacc.summary.year
-
-#save to pdf
-#pdf("ddaccsummaryyear.pdf", height=6, width=8)
-#ddacc.summary.year
-#dev.off()
-
-#what about amount of precipitation? say number of rainy days
-rainday.summary.year<-ggplot(weather.by.year, aes(x=as.factor(year), y=rain.days, fill=as.factor(year)))+
-  #scale_fill_manual(values=pal)+
-  geom_bar(stat="identity", colour="black")+
-  theme_bw(base_size = 20)+
-  guides(fill=FALSE)+
-  ylab("\nNumberof rainy days\n")+
-  xlab("\nYear\n")+
-  theme(axis.text.x=element_text(angle=90))
-
-rainday.summary.year
-
-#save to pdf
-#pdf("raindaysummaryyear.pdf", height=6, width=8)
-#rainday.summary.year
-#dev.off()
-
-#and total precipitation
-precip.summary.year<-ggplot(weather.by.year, aes(x=as.factor(year), y=precip, fill=as.factor(year)))+
-  #scale_fill_manual(values=pal)+
-  geom_bar(stat="identity", colour="black")+
-  theme_bw(base_size = 20)+
-  guides(fill=FALSE)+
-  ylab("\nTotal precipitation (mm)\n")+
-  xlab("\nYear\n")+
-  theme(axis.text.x=element_text(angle=90))
-
-precip.summary.year
-
-#save to pdf
-#pdf("precipsummaryyear.pdf", height=6, width=8)
-#precip.summary.year
-#dev.off()
-
-
-#is there a relationship between rain and degree day accumulation? 
-plot(weather.by.year$precip,weather.by.year$ddacc)
-#not much, though there are a few hot-dry and a few cold-wet years
-#I don't think we need to go down this rabbit hole for the present analysis
- 
-
-
-
-#multivariate analysis. So we want to see if the habitat use patterns of the lampyrids have
-#changed, both within season and through the years
+#multivariate analysis. So we want to see if the habitat use patterns of the lampyrids have changes
 #to do this, we'll need to reshape the data into two different matrices where we have 
-#abundance of fireflies by TREAT_DESC at yearly and weekly resolutions- a cros-tab,
+#abundance of fireflies by TREAT_DESC at yearly resolutions- a cross-tab,
 #wide format data. 
 
 #start by building the matrices
-#we can use our previously melted data fram 'lampyrid1' and cast it as needed
+#we can use our previously melted data from 'lampyrid1' and cast it as needed
 #because of unequal numbers of reps between forest and main sites, but same number of subsamples 
 #per rep, we'll treat subsamples as rep for this analysis and pool by rep instead
 
-#cast at the yearly resolution first
+#cast at the yearly resolution 
 landscape.year<-dcast(lampyrid1, year+study+STATION~TREAT_DESC, sum)
-landscape.week<-dcast(lampyrid1, year+tudy+week+STATION~TREAT_DESC, sum)
 
-#there are some weeks where zero fireflies were captured. We need to remove these 
-#weeks from the matrix before we can continue-
-
-landscape.week$sums<-rowSums(landscape.week[6:15])
-landscape.week<-landscape.week[which(landscape.week$sums>0),]
-landscape.week$sums<-NULL
-
-#now we need to create 'environmental' matricies- corresponding environmental 
-#variables that may offer explanations about what is going on when we run our 
-#multivariate analysis
-#we already computed 'weather.by.year' but will need to also compute the same for 
-#our weekly analysis
-weather.by.week <- weather1 %>%
-  group_by(year, week) %>%
-  summarise(
-    precip    = max(prec.accum, na.rm = TRUE),
-    rain.days = sum(rain.days, na.rm = TRUE),
-    ddacc     = max(dd.accum, na.rm = TRUE),
-    precip.0  = max(prec.accum.0, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-#now create the environmental matrix, preserving order from the community matricies by
+#now create the environmental matrix, preserving order from the community matrices by
 #creating them from the community matrix
 
-env.landscape.year<-landscape.year[,1:4]
-env.landscape.week<-landscape.week[,1:5]
+env.landscape.year<-landscape.year[,1:3]
 
-#we now need to pull our weather summary data into these matrices
-env.landscape.year<-merge(env.landscape.year, weather.by.year, by=c("year"), all.x=TRUE)
-env.landscape.week<-merge(env.landscape.week, weather.by.week, by=c("year", "week"), all.x=TRUE)
 
 #finally strip out the env data
-landscape.year<-landscape.year[,5:14]
-landscape.week<-landscape.week[,6:15]
+landscape.year<-landscape.year[,4:13]
 
 #Ok! data is ready for some NMDSing! WOOO
 library(vegan)
@@ -732,13 +620,13 @@ library(vegan)
 ord.year<-metaMDS(landscape.year, autotransform=TRUE)
 ord.year
 
+permanova <- adonis2(
+  landscape.year ~ study,
+  data = env.landscape.year,
+  method = "bray"   
+)
 
-#environmental fit- are any environmental factors driving habitat use patterns? looks like rainy days
-#are the only significant factor
-
-#fit.year<-envfit(ord.year~rain.days, env.landscape.year, perm=999)
-#summary(fit.year)
-#fit.year
+permanova #yup they're different
 
 #so, MetaMDS assumes the x axis of our matrix is species and y is sites. We are
 #screwing with this by instead looking at sites over samples for one species. So when I call "sites"
@@ -746,278 +634,76 @@ ord.year
 
 par(mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
 plot(ord.year, disp='sites', type='n')
+ordiellipse(ord.year, groups = env.landscape.year$study,
+                                                  kind = "sd",   # or "se"
+                                                  conf = 0.90,
+                                                  draw = "lines",
+                                                  col = pal,
+                                                  lwd = 2)
 with(env.landscape.year, points(ord.year, display = "sites", col = "black", pch = 21, bg = pal[as.factor(study)], cex=1.5))
 ordilabel(ord.year, display="species", cex=0.75, col="black")
 with(env.landscape.year, legend("right", legend = levels(as.factor(study)),
                                 bty = "n", col = "black", pch = 21, pt.bg = pal, 
                                 cex=1, pt.cex=1.5, inset=c(-0.2, 0), title="Study"))
 
+#veganize the plot
+library(ggrepel)
+# Site scores
+sites <- as.data.frame(scores(ord.year, display = "sites"))
+sites$study <- env.landscape.year$study
 
+# Species scores
+species <- as.data.frame(scores(ord.year, display = "species"))
+species$label <- rownames(species)
 
+lampy_ord<- ggplot() +
+  # Ellipses (like ordiellipse)
+  stat_ellipse(data = sites,
+               aes(x = NMDS1, y = NMDS2, color = study),
+               level = 0.90, linewidth = 1) +
+  
+  # Points (filled circles with black outline)
+  geom_point(data = sites,
+             aes(x = NMDS1, y = NMDS2, fill = study),
+             shape = 21, color = "black", size = 3) +
+  
+  # Species labels
+  geom_label_repel(data = species,
+                   aes(x = NMDS1, y = NMDS2, label = label),
+                   size = 3,
+                   fill = "white",
+                   color = "black",
+                   label.size = 0,
+                   box.padding = 0.2) +
+  
+  # Colors
+  scale_fill_manual(values = pal) +
+  scale_color_manual(values = pal) +
+  
+  # Theme
+  theme_classic(base_size = 14) +
+  theme(
+    legend.position = "right",
+    legend.title = element_text(face = "bold")
+  ) +
+  
+  labs(x = "NMDS1", y = "NMDS2", fill = "Study", color = "Study")
 
-
-
-
+lampy_ord
 
 #plot  
-pdf("figure3.pdf", height=8, width=8)
-par(mfrow=c(2,1), mar=c(4.1, 4.8, 1.5, 8.1),xpd=TRUE) 
-
-plot(ord.year, disp='sites', type='n')
-with(env.landscape.year, points(ord.year, display = "sites", col = "black", pch = 21, bg = pal[as.factor(study)], cex=1.5))
-ordilabel(ord.year, display="species", cex=0.75, col="black")
-with(env.landscape.year, legend("topright", legend = levels(as.factor(study)),
-                                bty = "n", col = "black", pch = 21, pt.bg = pal, 
-                                cex=1, pt.cex=1.5, inset=c(-0.2, 0), title="Study"))
-text(-1,0.23, "A", cex=2)
-
+pdf("Figure4.pdf", height=6, width=7)
+lampy_ord
 
 dev.off()
 
-#finally, let's do some generalized linear modelling to see what's important and if we can explain what's going on
-#we've clearly got a quadratic resonse to degree day accumulation, and since we're dealing with count data, we should model 
-#it using a poisson structure (or negative binomial if we've got a high residual deviance)
-#we'll use the MASS package
 
-library(MASS)
-#create a squared term so we can build a model with a quadratic in it
-lampyrid.weather$dd.accum2<-(lampyrid.weather$dd.accum)^2
-
-
-
-
-#After some initial fiddling, we find out that rain.days is a better predictor than precipitation accumulation, and given that these are 
-#seriously autocorrelated, let's just use rain days
-#we know TREAT_DESC is probably not important in interacting with dd.acc as we did not observe major tends by treatment when we looked at 
-#trends in captures by degree day accumulation by  treatment so we won't look for interactions
-#finally, because of convergence problems using glm.nb, we determined theta (dispersion parameter) iteratively
-#using glm with a negative binomial family instead. Less elegant and more labour intensive- but really brought residual deviance and AIC
-#values down, indicating a much better fit
-
-lam_model<-glm(ADULTS~dd.accum+dd.accum2*(as.factor(year))+TREAT_DESC, 
-               offset=TRAPS, data=lampyrid.weather, family=negative.binomial(0.6))
-summary(lam_model)
-
-
-#Let's just do a quick look to see how our model predictions look
-x<-(1:length(lampyrid.weather$DOY))
-lampyrid.weather$predicted<-(exp(predict(lam_model,lampyrid.weather)))
-
-plot(x, lampyrid.weather$predicted, ylim=c(0, 100))
-plot(x, lampyrid.weather$ADULTS, ylim=c(0, 100))
-
-#let's reshape these data and make a nice plot to show how well the model fits peaks
-
-model.performance<-as.data.frame(cbind(x,lampyrid.weather$predicted,lampyrid.weather$ADULTS))
-names(model.performance)[1]<-"number"
-names(model.performance)[2]<-"Predicted"
-names(model.performance)[3]<-"Observed"
-
-model.performance.1<-melt(model.performance, id="number")
-
-#now we can do a two faceted plot to show this
-
-model.plot<-ggplot(model.performance.1, aes(number, value, fill=as.factor(variable)))+
-  #scale_fill_manual(values=pal)+
-  geom_point(colour="black", pch=21, size=2)+
-  theme_bw(base_size = 20)+
-  ylim(0,50)+
-  facet_wrap(~variable, ncol=1)+
-  guides(fill=FALSE)+
-  xlab("\nObservation number")+
-  ylab("# Adults captured\n")
-model.plot
-
-#save to pdf
-pdf("figure5.pdf", height=6, width=8)
-model.plot
-dev.off()
-
-
-#Let's see how well the model works when we look at data with a lower resolution 
-#(to damp out a bit of sampling variability + make it comparable to our smoothed plots from before)
-
-lampyrid.weather.summary <- lampyrid.weather %>%
-  group_by(year, week) %>%
-  summarise(
-    ADULTS    = sum(ADULTS, na.rm = TRUE),
-    TRAPS     = sum(TRAPS, na.rm = TRUE),
-    predicted = sum(predicted, na.rm = TRUE),
-    avg       = sum(ADULTS, na.rm = TRUE) / sum(TRAPS, na.rm = TRUE),
-    avgpred   = sum(predicted, na.rm = TRUE) / sum(TRAPS, na.rm = TRUE),
-    dd.accum  = max(dd.accum, na.rm = TRUE),
-    rain.days = max(rain.days, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-lampyrid.summary.ddacc.PRED<-ggplot(lampyrid.weather.summary, aes(dd.accum, avg, 
-                                                     fill=factor(year)))+
-  
-  #scale_fill_manual(values=pal)+
-  geom_smooth(aes(dd.accum, avgpred), color="black", se=FALSE)+
-  geom_point(colour="black", pch=21, size=4)+
-  theme_bw(base_size = 20)+
-  guides(fill=guide_legend(title="Year"))+
-  theme(legend.key=element_blank())+
-  xlab("\nDegree day accumulation")+
-  ylab("Adults per trap\n")
-
-lampyrid.summary.ddacc.PRED
-
-#save to pdf
-#pdf("modelddsmoothwithpredicted.pdf", height=6, width=8)
-#lampyrid.summary.ddacc.PRED
-#dev.off()
-
-#Cool! So now we want to see how the peak is varying by year, and see if there are any environmental parameters that explain it
-#we first need to extract the coefficients from the lam_model
-
-coef<-as.data.frame(summary(lam_model)$coefficients)
-#get rid of those pesky t and P statistics
-coef<-coef[,1:2]
-
-
-
-ddcoef<-coef$Estimate[2]
-dd2coef<-coef$Estimate[3]
-ddcoef.err<-coef$"Std. Error"[2]
-dd2coef.err<-coef$"Std. Error"[3]
-
-#create a vector of years
-year<-(2004:2025)
-
-#create vector of coefficients
-#remember 2004 is the 'intercept' vector so it's unmodified, we'll give it a year 
-#modifier and error of zero
-
-yearcoef<-c(0, coef$Estimate[34:54])
-yearcoef.err<-c(0, coef$"Std. Error"[34:54])
-
-#create a new data frame to integrate the coeficients with the year vector
-peaks<-as.data.frame(cbind(year, yearcoef, yearcoef.err))
-
-#peak will occur at -ddcoeficient/(2(dd2coeficient+year coeficient))
-peaks$peak<- -ddcoef/(2*(dd2coef+yearcoef))
-
-#peak error calculated using the general error propagation formula
-#this will be a bit inelegant, but I calculated the partial derrivatives 
-#relative to each variable myself!
-peaks$peak.err<-sqrt((2*(dd2coef+yearcoef))^(-2) *ddcoef.err^2+
-                       (ddcoef/(2*(dd2coef+yearcoef))^2)^2*(dd2coef.err^2+yearcoef.err^2))
-
-#let's visualize this!
-
-peaks.year<-ggplot(peaks, aes(x=as.factor(year), y=peak, fill=as.factor(year)))+
-  #scale_fill_manual(values=pal)+
-  geom_bar(stat="identity", colour="black")+
-  geom_errorbar(aes(ymin=peak-peak.err, ymax=peak+peak.err))+
-  theme_bw(base_size = 20)+
-  guides(fill=FALSE)+
-  ylab("\nDD at peak emergence\n")+
-  xlab("\nYear\n")+
-  theme(axis.text.x=element_text(angle=90))
-peaks.year
-
-#save to pdf
-pdf("figure6.pdf", height=6, width=8)
-peaks.year
-dev.off()
-
-#ok, now let's figure out which week each peak occurred in
-weeks<-c()
-for (i in 1:length(peaks$year)){
-  #set an arbitrariliy high 'last week' dd caccumulation so the first condition is never
-  #met in the first iteration for each year
-  ddlastweek<-10000
-    for(j in 1:length(weather.by.week$year)){
-      if ((peaks$year[i]==weather.by.week$year[j])&
-          (peaks$peak[i]>ddlastweek)&
-          (peaks$peak[i]<weather.by.week$ddacc[j])){
-        week<-weather.by.week$week[j]
-        weeks<-c(weeks, week)
-        break
-      }
-      else{
-        ddlastweek<-weather.by.week$ddacc[j]
-      }
-    }
-}
-#put it into our peak object
-peaks$week<-weeks
-
-#this allows us to merge in other relevant data with our peak dataset
-peaks<-merge(peaks, captures.by.year, by=c("year"), all.x=TRUE)
-peaks$ddacc<-NULL
-peaks<-merge(peaks, weather.by.week, by=c("year", "week"), all.x=TRUE)
-
-
-dd.vs.precip<-ggplot(peaks, aes(precip.0, peak))+
-  #scale_fill_manual(values=pal)+
-  geom_smooth(method="lm", formula=y~poly(x,2), se=FALSE, color="black")+
-  geom_errorbar(aes(ymin=peak-peak.err, ymax=peak+peak.err))+
-  geom_point(aes(fill=as.factor(year)), pch=21, color="black", size=4)+
-  theme_bw(base_size = 20)+
-  guides(fill=guide_legend(title="Year"))+
-  theme(legend.key=element_blank())+
-  xlab("\nPrecipitation accumulation (mm)")+
-  ylab("DD at peak emergence\n")
-
-dd.vs.precip  
-
-#save to pdf
-pdf("figure7.pdf", height=6, width=8)
-dd.vs.precip
-dev.off()
-
-
-peaks$precip.02<-peaks$precip.0^2
-
-env.test<-glm(peak~precip.0+precip.02, data=peaks, family="gaussian")
-summary(env.test)
 
 ######################
 # Begin GAM phenology analysis
 
-#while we're at this, let's make some yearly summary data that will allow us to
-#characterize weather by year. Since it looks like seasonality plays a role in within-year 
-#partitioning (spoilers!) let's get some accumulations at key points in the season- let's do
-#week 25, 30, and 35 and get dd accum, precip accum for each year
 
-keypoints<-c(20, 25, 30, 35)
-
-weather_keypoints<-weather_weekly[which(weather_weekly$week  %in% keypoints),]
-
-#cull out the non-accumulated data
-
-weather_keypoints1<-weather_keypoints[,c(1:2, 6, 12)]
-
-#now we need to recast each of the response columns as their own unique responses by week
-#dd accum
-library(reshape2)
-dd.year<-dcast(weather_keypoints1, year~week,
-               value.var ="dd.accum",  sum)
-colnames(dd.year)<-c("year", "dd20", "dd25", "dd30", "dd35")
-#create metrics for DIFFERENCE from last time point too
-dd.year$dd25.dif<-dd.year$dd25-dd.year$dd20
-dd.year$dd30.dif<-dd.year$dd30-dd.year$dd25
-dd.year$dd35.dif<-dd.year$dd35-dd.year$dd30
-
-#precip
-precip.year<-dcast(weather_keypoints1, year~week,
-                   value.var ="yearly.precip.accum",  sum)
-
-colnames(precip.year)<-c("year", "precip20", "precip25", "precip30", "precip35")
-
-#create metrics for DIFFERENCE from last time point too
-precip.year$precip25.dif<-precip.year$precip25-precip.year$precip20
-precip.year$precip30.dif<-precip.year$precip30-precip.year$precip25
-precip.year$precip35.dif<-precip.year$precip35-precip.year$precip30
-
-
-
-
-# let's rough in our gam models. Just like with the multivariate analysis, we'll look at
-#two different scales- within year dynamics and between year dynamics
+# let's rough in our gam models.
 library(mgcv)
 library(visreg)
 library(ggpubr)
@@ -1026,32 +712,34 @@ library(cowplot)
 
 #pearson correlation of environmental parameters
 
-round(cor(lampyrid.weather[11:22], method="pearson"), digits=2)
+round(cor(lampyrid.weather[10:19], method="pearson"), digits=2)
 #start withe the drivers of within-year variation
-
-
 
 
 ##################### Lampy gam
 
 
 #by study
-gam_lampy<-gam(ADULTS~s(dd.accum, sp=1, by= study)+
-                 s(week, sp=1, by=study)+
-                    s(weekly.precip, sp=1, by=study)+
-                    s(max.temp, sp=1, by=study)+
-                    s(min.temp, sp=1, by=study)+ 
-                    TREAT_DESC*study+
-                    #s(year, sp=1)+
-                    offset(log(TRAPS)), method="REML", data=lampyrid.weather, family="quasipoisson")
+gam_lampy <- gam(
+  ADULTS ~ 
+    s(week, by = study) +         
+    s(dd.accum, by = study) +                
+    s(year, by = study, bs = "ts", sp=1.3) +   # manage cyclicity but constrain amplitude so simple year effects do not dominate
+    s(min.temp, by = study,  bs = "ts") +      # allow shrinkage if redundant
+    s(max.temp, by = study,  bs = "ts") +      # allow shrinkage if redundant
+    s(weekly.precip, by = study, bs = "ts") +  # allow shrinkage if redundant
+    TREAT_DESC * study +
+    offset(log(TRAPS)),
+  method = "REML",
+  family = "quasipoisson",
+  data = lampyrid.weather,
+  knots = list(week = c(1, 52))
+)
 summary(gam_lampy)
 anova(gam_lampy) #significance of parametric terms
 
-
-# #check concurvity
-# concurvity(gam_lampy)
-# #looks fine, sweet!
-# gam.check(gam_lampy)
+#check on how we're doing here- adjust k up for smooths as needed
+gam.check(gam_lampy)
 
 
 withinyear.dd.lampy<-visreg(gam_lampy, "dd.accum", "study", partial=F, rug=FALSE, 
@@ -1059,7 +747,14 @@ withinyear.dd.lampy<-visreg(gam_lampy, "dd.accum", "study", partial=F, rug=FALSE
   scale_colour_manual(values = pal) +
   labs(x="Degree day accumulation", y="")+
   theme_classic()+ theme(legend.position = "none")+
-  coord_cartesian(xlim = c(250, 1200), ylim=c(0, 20))
+  coord_cartesian(xlim = c(250, 1200), ylim=c(0, 30))+
+  annotate(
+    "text",
+    x = -Inf, y = Inf,       # top-left corner
+    label = "\U1F525",       # fire emoji
+    hjust = -0.1, vjust = 1.3,
+    size = 8, family='emoji'
+  )
 
 withinyear.dd.lampy
 
@@ -1068,7 +763,14 @@ withinyear.week.lampy<-visreg(gam_lampy, "week", "study", partial=F, rug=FALSE,
   scale_colour_manual(values = pal) +
   labs(x="Week of year", y="")+
   theme_classic()+ theme(legend.position = "none")+
-  coord_cartesian(xlim = c(22, 35), ylim=c(0, 20))
+  coord_cartesian(xlim = c(24, 33), ylim=c(0, 30))+
+  annotate(
+              "text",
+              x = -Inf, y = Inf,       # top-left corner
+              label = "\u2600",       # 
+              hjust = -0.1, vjust = 1.3,
+              size = 8, family='emoji'
+            )
 
 withinyear.week.lampy
 
@@ -1077,7 +779,15 @@ withinyear.maxt.lampy<-visreg(gam_lampy, "max.temp", "study", partial=F, rug=FAL
   scale_colour_manual(values = pal) +
   labs(x="Maximum temperature", y="")+
   theme_classic()+ theme(legend.position = "none")+
-  coord_cartesian(xlim = c(25, 35), ylim=c(0, 20))
+  coord_cartesian(xlim = c(25, 35), ylim=c(0, 30))+
+  annotate(
+    "text",
+    x = -Inf, y = Inf,       # top-left corner
+    label = "\U1F321",       # 
+    hjust = -0.1, vjust = 1.3,
+    size = 8, family='emoji'
+  )
+  
 
 withinyear.maxt.lampy
 
@@ -1086,7 +796,14 @@ withinyear.mint.lampy<-visreg(gam_lampy, "min.temp", "study", partial=F, rug=FAL
   scale_colour_manual(values = pal) +
   labs(x="Minimum temperature", y="")+
   theme_classic()+ theme(legend.position = "none")+
-  coord_cartesian(xlim = c(11, 19), ylim=c(0, 20))
+  coord_cartesian(xlim = c(10, 17), ylim=c(0, 30))+
+  annotate(
+    "text",
+    x = -Inf, y = Inf,       # top-left corner
+    label = "\U1F321",       # 
+    hjust = -0.1, vjust = 1.3,
+    size = 8, family='emoji'
+  )
 
 withinyear.mint.lampy
 
@@ -1095,16 +812,78 @@ withinyear.precip.lampy<-visreg(gam_lampy, "weekly.precip", "study", partial=F, 
   scale_colour_manual(values = pal) +
   labs(x="Weekly precipitation", y="")+
   theme_classic()+ theme(legend.position = "none")+
-  coord_cartesian(xlim = c(0, 30), ylim=c(0, 20))
+  coord_cartesian(xlim = c(0, 30), ylim=c(0, 30))+
+  annotate(
+  "text",
+  x = -Inf, y = Inf,       # top-left corner
+  label = "\U1F327",       # 
+  hjust = -0.1, vjust = 1.3,
+  size = 8, family='emoji'
+)
 
 withinyear.precip.lampy
+
+#because the Herman and New data have different ranges, we need to snip off the wonky bits where there was no data to fit
+
+vr <- visreg(gam_lampy, "year", "study",
+             partial = FALSE,
+             rug = FALSE,
+             overlay = TRUE,
+             scale = "response",
+             gg = FALSE,
+             plot=FALSE)
+
+plot_data <- vr$fit
+library(dplyr)
+
+ranges <- lampyrid.weather %>%
+  group_by(study) %>%
+  summarise(
+    min_year = min(year, na.rm = TRUE),
+    max_year = max(year, na.rm = TRUE),
+    .groups = "drop"
+  )
+plot_data_trimmed <- plot_data %>%
+  left_join(ranges, by = "study") %>%
+  filter(year >= min_year, year <= max_year)
+
+withinyear.year.lampy <- ggplot(plot_data_trimmed,
+                                aes(x = year, y = visregFit, colour = study)) +
+  geom_ribbon(aes(ymin = visregLwr, ymax = visregUpr, fill = study),
+              alpha = 0.4, colour = NA) +
+  geom_line(linewidth=1) +
+  scale_colour_manual(values = pal) +
+  scale_fill_manual(values = pal) +
+  labs(x = "Year", y = "") +
+  theme_classic() +
+  theme(legend.position = "none") +
+  coord_cartesian(xlim = c(2004, 2025), ylim = c(0, 30))+
+  annotate(
+              "text",
+              x = -Inf, y = Inf,       # top-left corner
+              label = "\U1F4C5",       # 
+              hjust = -0.1, vjust = 1.3,
+              size = 8, family='emoji'
+            )
+
+
+
+withinyear.year.lampy
 
 withinyear.habitat.lampy<-visreg(gam_lampy, "TREAT_DESC", "study", partial=F, rug=FALSE, 
                                 overlay=T, scale="response", gg=TRUE)+
   scale_colour_manual(values = pal) +
   labs(x="\nTreatment", y="")+
   theme_classic()+ theme(axis.text.x = element_text(angle = 90), legend.position = "none")+
-  coord_cartesian(ylim=c(0, 20))
+  coord_cartesian(ylim=c(0, 30))+
+  annotate(
+              "text",
+              x = -Inf, y = Inf,       # top-left corner
+              label = "\U1F33F",       # 
+              hjust = -0.1, vjust = 1.3,
+              size = 8, family='emoji'
+            )
+
 
 
 withinyear.habitat.lampy
@@ -1121,12 +900,12 @@ legend_lampy <- get_legend(withinyear.dd.lampy.leg)
 
 withinyear.modelplot.lampy<-plot_grid(withinyear.dd.lampy,withinyear.week.lampy,  
                                       withinyear.mint.lampy, withinyear.maxt.lampy, 
-                                      withinyear.precip.lampy, withinyear.habitat.lampy,
-                                      ncol=1, rel_heights = c(1, 1, 1, 1, 1, 2), labels=c('A', 'B', 'C', 'D', 'E', 'F'), align="v")
+                                      withinyear.precip.lampy, withinyear.year.lampy, withinyear.habitat.lampy,
+                                      ncol=1, rel_heights = c(1, 1, 1, 1, 1, 1, 2), labels=c('A', 'B', 'C', 'D', 'E', 'F', 'G'), align="v")
 withinyear.modelplot.lampy
 
 #create overall y axis label
-partresid<-text_grob(paste("        Partial residual captures"), color="black", size=12, rot=90)
+partresid<-text_grob(paste("        Partial residuals of adult abundance"), color="black", size=12, rot=90)
 
 
 #now replot with grob label
@@ -1142,438 +921,113 @@ final_plot <- plot_grid(withinyear.plot.lampy,
 final_plot
 
 
-pdf("figurewithinyeargamlampybystudy.pdf", height=10, width=6)
+pdf("Figure2.pdf", height=12, width=6)
 final_plot
 dev.off()
 ###
 
 
+##################
+#ok, now we want to put our model coefficients into a nice graphical representation
 
-#we'll want to extract the data associated with activity peaks
+library(dplyr)
+library(ggplot2)
 
-#ok, I think we found the method we should use! here's the tutorial:
-# https://fromthebottomoftheheap.net/2014/05/15/identifying-periods-of-change-with-gams/
+library(dplyr)
+library(ggplot2)
 
-#first we create a new dataframe that we can use our model to predict the values for optima
-#we use good guesses at values for other optima to create conditions where species is reasonably abundant for modelled parameter 
+# ---- 1. Smooth terms ----
+gam_sum <- summary(gam_lampy)
 
-#create data for lampy, holding everything constant but degree days
-newData.lampy.dd <- with(lampyrid.weather,
-                         data.frame(dd.accum = seq(250, 1500, length = 300),#use natural range of data
-                                    TRAPS=5,
-                                    week=28,
-                                    weekly.precip=15, # not really important
-                                    max.temp=31, #maxes near 31
-                                    min.temp=14, #maxes near 12
-                                    study="Hermann",
-                                    TREAT_DESC="Forage")) #most abundant in both time periods
+smooth_df <- as.data.frame(gam_sum$s.table)
+smooth_df$term <- rownames(smooth_df)
 
-#make the same frame but for 1 more degday
-newData.lampy.1.dd<- with(lampyrid.weather,
-                          data.frame(dd.accum = seq(251, 1501, length = 300), #use natural range of data
-                                     TRAPS=5, 
-                                     week=28,
-                                     weekly.precip=15, # not really important
-                                     max.temp=31, #maxes near 31
-                                     min.temp=14, #maxes near 12
-                                     study="Hermann",
-                                     TREAT_DESC="Forage")) #most abundant in both time periods
+smooth_df_tidy <- smooth_df %>%
+  mutate(
+    study = sub(".*:study", "", term),
+    variable = sub("s\\((.*)\\):.*", "\\1", term),
+    F_value = .[[3]]  # third column is F
+  ) %>%
+  dplyr::select(variable, study, F_value)
 
-
-
-
-# Predictions
-pred0 <- predict(gam_lampy, newData.lampy.dd, type = "link")
-pred1 <- predict(gam_lampy, newData.lampy.1.dd, type = "link")
-
-# Build a clean dataframe
-dd.lampy.der <- data.frame(
-  dd.accum = newData.lampy.dd$dd.accum,
-  pred0 = pred0,
-  pred1 = pred1
+# ---- 2. Parametric Habitat terms ----
+# manually assign F-values from your anova output
+param_df_tidy <- data.frame(
+  variable = "Habitat",
+  study = c("Hermann", "New"),
+  F_value = c(54.33, 13.39)   # TREAT_DESC for Hermann, TREAT_DESC:study for New
 )
 
-# Numerical derivative
-dd.lampy.der$slope <- (dd.lampy.der$pred1 - dd.lampy.der$pred0)
-
-# Peak = point where slope switches from + to -
-peak_row <- dd.lampy.der[which.max(dd.lampy.der$pred0), ]
-peak_row
-
-#    dd.accum    pred0    pred1         slope
-# 130 789.2977 2.939264 2.939143 -0.0001209834
-
-#same for new data
-
-#create data for lampy, holding everything constant but degree days
-newData.lampy.dd <- with(lampyrid.weather,
-                         data.frame(dd.accum = seq(250, 1500, length = 300),#use natural range of data
-                                    TRAPS=5,
-                                    week=28,
-                                    weekly.precip=15, # not really important
-                                    max.temp=31, #maxes near 31
-                                    min.temp=14, #maxes near 12
-                                    study="New",
-                                    TREAT_DESC="Forage")) #most abundant in both time periods
-
-#make the same frame but for 1 more degday
-newData.lampy.1.dd<- with(lampyrid.weather,
-                          data.frame(dd.accum = seq(251, 1501, length = 300), #use natural range of data
-                                     TRAPS=5, 
-                                     week=28,
-                                     weekly.precip=15, # not really important
-                                     max.temp=31, #maxes near 31
-                                     min.temp=14, #maxes near 12
-                                     study="New",
-                                     TREAT_DESC="Forage")) #most abundant in both time periods
-
-
-
-
-# Predictions
-pred0 <- predict(gam_lampy, newData.lampy.dd, type = "link")
-pred1 <- predict(gam_lampy, newData.lampy.1.dd, type = "link")
-
-# Build a clean dataframe
-dd.lampy.der <- data.frame(
-  dd.accum = newData.lampy.dd$dd.accum,
-  pred0 = pred0,
-  pred1 = pred1
+# ---- 3. Combine smooth + parametric ----
+combined_df <- bind_rows(
+  smooth_df_tidy %>%
+    mutate(variable_label = case_when(
+      variable == "week" ~ "Week",
+      variable == "dd.accum" ~ "Degree Days",
+      variable == "year" ~ "Year",
+      variable == "min.temp" ~ "Min Temp",
+      variable == "max.temp" ~ "Max Temp",
+      variable == "weekly.precip" ~ "Precipitation",
+      TRUE ~ variable
+    )),
+  param_df_tidy %>%
+    mutate(variable_label = "Habitat")
 )
 
-# Numerical derivative
-dd.lampy.der$slope <- (dd.lampy.der$pred1 - dd.lampy.der$pred0)
+# ---- 4. Hard-coded variable order ----
+variable_levels <- c("Degree Days", "Week", "Max Temp", "Min Temp", 
+                     "Precipitation", "Year", "Habitat")
+combined_df$variable_label <- factor(combined_df$variable_label, levels = variable_levels)
 
-# Peak = point where slope switches from + to -
-peak_row <- dd.lampy.der[which.max(dd.lampy.der$pred0), ]
-peak_row
+# ---- 5. Plot ----
+library(dplyr)
+library(ggplot2)
 
-
-#goes to heck - peak is at the poorly fit end
-#dd.accum    pred0    pred1      slope
-#300     1500 5.380359 5.387464 0.00710511
-
-#do it for week
-
-# Sequence of week values to explore
-week_seq <- seq(18, 35, length = 300)
-
-# Create new data frame holding everything constant except week
-newData.lampy.week <- data.frame(
-  dd.accum = 758,            # fixed degree days
-  TRAPS = 5,
-  week = week_seq,
-  weekly.precip = 15,
-  max.temp = 31,
-  min.temp = 14,
-  study = "Hermann",
-  TREAT_DESC = "Forage"
+# Define Unicode icons per variable
+variable_icons <- c(
+  "Degree Days" ="\U1F525",       # fire
+  "Week" =  "\u2600",            # sun
+  "Max Temp" = "\U1F321",        # thermometer
+  "Min Temp" = "\U1F321",        # thermometer
+  "Precipitation" = "\U1F327",   # cloud with rain
+  "Year" = "\U1F4C5",            # calendar
+  "Habitat" = "\U1F33F"          # leaf
 )
 
-# Create same frame with week + 1 for numerical derivative
-newData.lampy.week.1 <- newData.lampy.week
-newData.lampy.week.1$week <- newData.lampy.week.1$week + 1/300  # small increment for derivative
+# Compute max F per variable for icon placement
+icon_positions <- combined_df %>%
+  group_by(variable_label) %>%
+  summarise(
+    y_pos = max(F_value) +5,
+    icon = variable_icons[unique(variable_label)],
+    .groups = "drop"
+  )
+
+# Plot bars with Unicode icons above each pair
+F_barplot_unicode <- ggplot(combined_df, aes(x = variable_label, y = F_value, fill = study)) +
+  geom_bar(stat = "identity",
+           position = position_dodge(width = 0.6),
+           colour = "black",
+           width = 0.8) +
+  geom_text(data = icon_positions, 
+            aes(x = variable_label, y = y_pos, label = icon), 
+            inherit.aes = FALSE, 
+            size = 8, family = "emoji") +  # adjust size to taste
+  labs(x = "Predictor", y = "F value", fill = "Study") +
+  scale_fill_manual(values = pal) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, face = "bold"),
+    axis.title = element_text(face = "bold"),
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 12)
+  )
+
+F_barplot_unicode
+
+pdf("Figure1.pdf", height=6, width=8)
+F_barplot_unicode
+dev.off()
 
-# Predict on the link scale
-pred0 <- predict(gam_lampy, newData.lampy.week, type = "link")
-pred1 <- predict(gam_lampy, newData.lampy.week.1, type = "link")
 
-# Build clean dataframe
-week.lampy.der <- data.frame(
-  week = week_seq,
-  pred0 = pred0,
-  pred1 = pred1
-)
 
-# Numerical derivative
-week.lampy.der$slope <- week.lampy.der$pred1 - week.lampy.der$pred0
-
-# Peak = point where slope switches from + to -
-peak_row <- week.lampy.der[which.max(week.lampy.der$pred0), ]
-peak_row
-
-#  week    pred0    pred1         slope
-#1   18 3.993228 3.993201 -2.677338e-05
-
-# Sequence of week values to explore
-week_seq <- seq(18, 35, length = 300)
-
-# Create new data frame holding everything constant except week
-newData.lampy.week <- data.frame(
-  dd.accum = 758,            # fixed degree days
-  TRAPS = 5,
-  week = week_seq,
-  weekly.precip = 15,
-  max.temp = 31,
-  min.temp = 14,
-  study = "New",
-  TREAT_DESC = "Forage"
-)
-
-# Create same frame with week + 1 for numerical derivative
-newData.lampy.week.1 <- newData.lampy.week
-newData.lampy.week.1$week <- newData.lampy.week.1$week + 1/300  # small increment for derivative
-
-# Predict on the link scale
-pred0 <- predict(gam_lampy, newData.lampy.week, type = "link")
-pred1 <- predict(gam_lampy, newData.lampy.week.1, type = "link")
-
-# Build clean dataframe
-week.lampy.der <- data.frame(
-  week = week_seq,
-  pred0 = pred0,
-  pred1 = pred1
-)
-
-# Numerical derivative
-week.lampy.der$slope <- week.lampy.der$pred1 - week.lampy.der$pred0
-
-# Peak = point where slope switches from + to -
-peak_row <- week.lampy.der[which.max(week.lampy.der$pred0), ]
-peak_row
-
-#week    pred0    pred1         slope
-#173 27.77926 2.200434 2.200429 -5.036234e-06
-
-# Sequence of min.temp values to explore
-mint_seq <- seq(0, 20, length = 300)
-
-# Create new data frame holding everything constant except min.temp
-newData.lampy.mint <- data.frame(
-  dd.accum = 758,          # fixed degree days
-  TRAPS = 5,
-  week = 28,               # fixed week
-  weekly.precip = 15,
-  max.temp = 31,
-  min.temp = mint_seq,     # varying min.temp
-  study = "Hermann",
-  TREAT_DESC = "Forage"
-)
-
-# Create same frame with min.temp + small increment for numerical derivative
-newData.lampy.mint.1 <- newData.lampy.mint
-newData.lampy.mint.1$min.temp <- newData.lampy.mint.1$min.temp + 1/300  # small increment
-
-# Predict on the link scale
-pred0 <- predict(gam_lampy, newData.lampy.mint, type = "link")
-pred1 <- predict(gam_lampy, newData.lampy.mint.1, type = "link")
-
-# Build clean dataframe
-mint.lampy.der <- data.frame(
-  min.temp = mint_seq,
-  pred0 = pred0,
-  pred1 = pred1
-)
-
-# Numerical derivative
-mint.lampy.der$slope <- mint.lampy.der$pred1 - mint.lampy.der$pred0
-
-# Peak = point where slope switches from + to -
-peak_row <- mint.lampy.der[which.max(mint.lampy.der$pred0), ]
-peak_row
-
-#  min.temp   pred0    pred1         slope
-#217 14.44816 2.93519 2.935164 -2.514417e-05
-
-
-# Sequence of min.temp values to explore
-mint_seq <- seq(0, 20, length = 300)
-
-# Create new data frame holding everything constant except min.temp
-newData.lampy.mint <- data.frame(
-  dd.accum = 758,          # fixed degree days
-  TRAPS = 5,
-  week = 28,               # fixed week
-  weekly.precip = 15,
-  max.temp = 31,
-  min.temp = mint_seq,     # varying min.temp
-  study = "New",
-  TREAT_DESC = "Forage"
-)
-
-# Create same frame with min.temp + small increment for numerical derivative
-newData.lampy.mint.1 <- newData.lampy.mint
-newData.lampy.mint.1$min.temp <- newData.lampy.mint.1$min.temp + 1/300  # small increment
-
-# Predict on the link scale
-pred0 <- predict(gam_lampy, newData.lampy.mint, type = "link")
-pred1 <- predict(gam_lampy, newData.lampy.mint.1, type = "link")
-
-# Build clean dataframe
-mint.lampy.der <- data.frame(
-  min.temp = mint_seq,
-  pred0 = pred0,
-  pred1 = pred1
-)
-
-# Numerical derivative
-mint.lampy.der$slope <- mint.lampy.der$pred1 - mint.lampy.der$pred0
-
-# Peak = point where slope switches from + to -
-peak_row <- mint.lampy.der[which.max(mint.lampy.der$pred0), ]
-peak_row
-
-#min.temp    pred0   pred1       slope
-#300       20 4.112051 4.11425 0.002199302
-
-# Sequence of max.temp values to explore
-maxt_seq <- seq(25, 35, length = 300)
-
-# Create new data frame holding everything constant except max.temp
-newData.lampy.maxt <- data.frame(
-  dd.accum = 758,
-  TRAPS = 5,
-  week = 28,
-  weekly.precip = 15,
-  max.temp = maxt_seq,    # varying max.temp
-  min.temp = 14,
-  study = "Hermann",
-  TREAT_DESC = "Forage"
-)
-
-# Create same frame with max.temp + small increment for numerical derivative
-newData.lampy.maxt.1 <- newData.lampy.maxt
-newData.lampy.maxt.1$max.temp <- newData.lampy.maxt.1$max.temp + 1/300  # small increment
-
-# Predict on the link scale
-pred0 <- predict(gam_lampy, newData.lampy.maxt, type = "link")
-pred1 <- predict(gam_lampy, newData.lampy.maxt.1, type = "link")
-
-# Build clean dataframe
-maxt.lampy.der <- data.frame(
-  max.temp = maxt_seq,
-  pred0 = pred0,
-  pred1 = pred1
-)
-
-# Numerical derivative
-maxt.lampy.der$slope <- maxt.lampy.der$pred1 - maxt.lampy.der$pred0
-
-# Peak = point where slope switches from + to -
-peak_row <- maxt.lampy.der[which.max(maxt.lampy.der$pred0), ]
-peak_row
-
-
- #  max.temp    pred0    pred1        slope
-#235 32.82609 3.167134 3.167145 1.088545e-05
-
-# Sequence of max.temp values to explore
-maxt_seq <- seq(25, 35, length = 300)
-
-# Create new data frame holding everything constant except max.temp
-newData.lampy.maxt <- data.frame(
-  dd.accum = 758,
-  TRAPS = 5,
-  week = 28,
-  weekly.precip = 15,
-  max.temp = maxt_seq,    # varying max.temp
-  min.temp = 14,
-  study = "New",
-  TREAT_DESC = "Forage"
-)
-
-# Create same frame with max.temp + small increment for numerical derivative
-newData.lampy.maxt.1 <- newData.lampy.maxt
-newData.lampy.maxt.1$max.temp <- newData.lampy.maxt.1$max.temp + 1/300  # small increment
-
-# Predict on the link scale
-pred0 <- predict(gam_lampy, newData.lampy.maxt, type = "link")
-pred1 <- predict(gam_lampy, newData.lampy.maxt.1, type = "link")
-
-# Build clean dataframe
-maxt.lampy.der <- data.frame(
-  max.temp = maxt_seq,
-  pred0 = pred0,
-  pred1 = pred1
-)
-
-# Numerical derivative
-maxt.lampy.der$slope <- maxt.lampy.der$pred1 - maxt.lampy.der$pred0
-
-# Peak = point where slope switches from + to -
-peak_row <- maxt.lampy.der[which.max(maxt.lampy.der$pred0), ]
-peak_row
-
-#max.temp    pred0    pred1        slope
-#188 31.25418 2.201306 2.201307 1.360731e-06
-
-# Sequence of weekly.precip values
-precip_seq <- seq(0, 20, length = 300)
-
-# Create new data frame holding everything constant except weekly.precip
-newData.lampy.precip <- data.frame(
-  dd.accum = 758,
-  TRAPS = 5,
-  week = 28,
-  weekly.precip = precip_seq,    # varying precipitation
-  max.temp = 31,
-  min.temp = 14,
-  study = "Hermann",
-  TREAT_DESC = "Forage"
-)
-
-# Create same frame with small increment for numerical derivative
-newData.lampy.precip.1 <- newData.lampy.precip
-newData.lampy.precip.1$weekly.precip <- newData.lampy.precip.1$weekly.precip + 1/300  # small increment
-
-# Predict on the link scale
-pred0 <- predict(gam_lampy, newData.lampy.precip, type = "link")
-pred1 <- predict(gam_lampy, newData.lampy.precip.1, type = "link")
-
-# Build clean dataframe
-precip.lampy.der <- data.frame(
-  weekly.precip = precip_seq,
-  pred0 = pred0,
-  pred1 = pred1
-)
-
-# Numerical derivative
-precip.lampy.der$slope <- precip.lampy.der$pred1 - precip.lampy.der$pred0
-
-# Peak = point where slope switches from + to -
-peak_row <- precip.lampy.der[which.max(precip.lampy.der$pred0), ]
-peak_row
-
-# weekly.precip    pred0   pred1        slope
-#1     0 3.133279 3.13321 -6.90108e-05
-
-
-# Sequence of weekly.precip values
-precip_seq <- seq(0, 20, length = 300)
-
-# Create new data frame holding everything constant except weekly.precip
-newData.lampy.precip <- data.frame(
-  dd.accum = 758,
-  TRAPS = 5,
-  week = 28,
-  weekly.precip = precip_seq,    # varying precipitation
-  max.temp = 31,
-  min.temp = 14,
-  study = "New",
-  TREAT_DESC = "Forage"
-)
-
-# Create same frame with small increment for numerical derivative
-newData.lampy.precip.1 <- newData.lampy.precip
-newData.lampy.precip.1$weekly.precip <- newData.lampy.precip.1$weekly.precip + 1/300  # small increment
-
-# Predict on the link scale
-pred0 <- predict(gam_lampy, newData.lampy.precip, type = "link")
-pred1 <- predict(gam_lampy, newData.lampy.precip.1, type = "link")
-
-# Build clean dataframe
-precip.lampy.der <- data.frame(
-  weekly.precip = precip_seq,
-  pred0 = pred0,
-  pred1 = pred1
-)
-
-# Numerical derivative
-precip.lampy.der$slope <- precip.lampy.der$pred1 - precip.lampy.der$pred0
-
-# Peak = point where slope switches from + to -
-peak_row <- precip.lampy.der[which.max(precip.lampy.der$pred0), ]
-peak_row
-
-#  weekly.precip    pred0    pred1         slope
-#70      4.615385 2.279095 2.279095 -4.809917e-08
