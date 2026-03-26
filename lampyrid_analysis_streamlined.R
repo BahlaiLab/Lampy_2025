@@ -891,8 +891,8 @@ withinyear.habitat.lampy
 #create a legend to pull
 withinyear.dd.lampy.leg <- withinyear.dd.lampy +
   theme(legend.position = "right")+
-  guides(fill = guide_legend(title = "Time block"),
-         color = guide_legend(title = "Time block"))
+  guides(fill = guide_legend(title = "Study"),
+         color = guide_legend(title = "Study"))
 legend_lampy <- get_legend(withinyear.dd.lampy.leg)
 
 
@@ -900,28 +900,22 @@ legend_lampy <- get_legend(withinyear.dd.lampy.leg)
 
 withinyear.modelplot.lampy<-plot_grid(withinyear.dd.lampy,withinyear.week.lampy,  
                                       withinyear.mint.lampy, withinyear.maxt.lampy, 
-                                      withinyear.precip.lampy, withinyear.year.lampy, withinyear.habitat.lampy,
-                                      ncol=1, rel_heights = c(1, 1, 1, 1, 1, 1, 2), labels=c('A', 'B', 'C', 'D', 'E', 'F', 'G'), align="v")
+                                      withinyear.precip.lampy, withinyear.year.lampy, withinyear.habitat.lampy,legend_lampy,
+                                      ncol=2, rel_heights = c(1, 1, 1, 2), labels=c('A', 'B', 'C', 'D', 'E', 'F', 'G'), align="v")
 withinyear.modelplot.lampy
 
 #create overall y axis label
-partresid<-text_grob(paste("        Partial residuals of adult abundance"), color="black", size=12, rot=90)
+partresid<-text_grob(paste("                 Partial residuals of adult abundance"), color="black", size=12, rot=90)
 
 
 #now replot with grob label
-withinyear.plot.lampy<-plot_grid(partresid, withinyear.modelplot.lampy, ncol=2, rel_widths = c(1,11))
+final_plot<-plot_grid(partresid, withinyear.modelplot.lampy, ncol=2, rel_widths = c(1,15))
 
-withinyear.plot.lampy
-
-
-final_plot <- plot_grid(withinyear.plot.lampy,
-                          legend_lampy,  ncol = 2,
-                          rel_widths = c(12, 4))
 
 final_plot
 
 
-pdf("Figure2.pdf", height=12, width=6)
+pdf("Figure2.pdf", height=8, width=8)
 final_plot
 dev.off()
 ###
