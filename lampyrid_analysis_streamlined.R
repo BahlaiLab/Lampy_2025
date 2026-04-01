@@ -1023,5 +1023,442 @@ pdf("Figure1.pdf", height=6, width=8)
 F_barplot_unicode
 dev.off()
 
+##############################################################
+#we'll want to extract the data associated with activity peaks
+
+#ok, I think we found the method we should use! here's the tutorial:
+# https://fromthebottomoftheheap.net/2014/05/15/identifying-periods-of-change-with-gams/
+
+#first we create a new dataframe that we can use our model to predict the values for optima
+#we use good guesses at values for other optima to create conditions where species is reasonably abundant for modelled parameter 
+
+#create data for lampy, holding everything constant but degree days
+newData.lampy.dd <- with(lampyrid.weather,
+                         data.frame(dd.accum = seq(250, 1500, length = 300),#use natural range of data
+                                    TRAPS=5,
+                                    week=28,
+                                    weekly.precip=15, # not really important
+                                    max.temp=31, #maxes near 31
+                                    min.temp=14, #maxes near 12
+                                    study="Hermann",
+                                    year=2012, #high year in Hermann
+                                    TREAT_DESC="Forage")) #most abundant in both time periods
+
+#make the same frame but for 1 more degday
+newData.lampy.1.dd<- with(lampyrid.weather,
+                          data.frame(dd.accum = seq(251, 1501, length = 300), #use natural range of data
+                                     TRAPS=5, 
+                                     week=28,
+                                     weekly.precip=15, # not really important
+                                     max.temp=31, #maxes near 31
+                                     min.temp=14, #maxes near 12
+                                     study="Hermann",
+                                     year=2012, #high year in Hermann
+                                     TREAT_DESC="Forage")) #most abundant in both time periods
 
 
+
+
+# Predictions
+pred0 <- predict(gam_lampy, newData.lampy.dd, type = "link")
+pred1 <- predict(gam_lampy, newData.lampy.1.dd, type = "link")
+
+# Build a clean dataframe
+dd.lampy.der <- data.frame(
+  dd.accum = newData.lampy.dd$dd.accum,
+  pred0 = pred0,
+  pred1 = pred1
+)
+
+# Numerical derivative
+dd.lampy.der$slope <- (dd.lampy.der$pred1 - dd.lampy.der$pred0)
+
+# Peak = point where slope switches from + to -
+peak_row <- dd.lampy.der[which.max(dd.lampy.der$pred0), ]
+peak_row
+
+#    dd.accum    pred0    pred1         slope
+#120 747.4916 2.561839 2.561639 -0.0001998607
+
+#same for new data
+
+#create data for lampy, holding everything constant but degree days
+newData.lampy.dd <- with(lampyrid.weather,
+                         data.frame(dd.accum = seq(250, 1500, length = 300),#use natural range of data
+                                    TRAPS=5,
+                                    week=28,
+                                    weekly.precip=15, # not really important
+                                    max.temp=31, #maxes near 31
+                                    min.temp=14, #maxes near 12
+                                    study="New",
+                                    year=2017, #high year in New
+                                    TREAT_DESC="Forage")) #most abundant in both time periods
+
+#make the same frame but for 1 more degday
+newData.lampy.1.dd<- with(lampyrid.weather,
+                          data.frame(dd.accum = seq(251, 1501, length = 300), #use natural range of data
+                                     TRAPS=5, 
+                                     week=28,
+                                     weekly.precip=15, # not really important
+                                     max.temp=31, #maxes near 31
+                                     min.temp=14, #maxes near 12
+                                     study="New",
+                                     year=2017, #high year in New
+                                     TREAT_DESC="Forage")) #most abundant in both time periods
+
+
+
+
+# Predictions
+pred0 <- predict(gam_lampy, newData.lampy.dd, type = "link")
+pred1 <- predict(gam_lampy, newData.lampy.1.dd, type = "link")
+
+# Build a clean dataframe
+dd.lampy.der <- data.frame(
+  dd.accum = newData.lampy.dd$dd.accum,
+  pred0 = pred0,
+  pred1 = pred1
+)
+
+# Numerical derivative
+dd.lampy.der$slope <- (dd.lampy.der$pred1 - dd.lampy.der$pred0)
+
+# Peak = point where slope switches from + to -
+peak_row <- dd.lampy.der[which.max(dd.lampy.der$pred0), ]
+peak_row
+
+
+#goes to heck - peak is at the poorly fit end
+#dd.accum    pred0    pred1      slope
+#300     1500 8.614479 8.628227 0.01374787
+
+#local peak at 730.7692
+
+#do it for week
+
+# Sequence of week values to explore
+week_seq <- seq(18, 35, length = 300)
+
+# Create new data frame holding everything constant except week
+newData.lampy.week <- data.frame(
+  dd.accum = 758,            # fixed degree days
+  TRAPS = 5,
+  week = week_seq,
+  weekly.precip = 15,
+  max.temp = 31,
+  min.temp = 14,
+  study = "Hermann",
+  year=2012, #high year in Hermann
+  TREAT_DESC = "Forage"
+)
+
+# Create same frame with week + 1 for numerical derivative
+newData.lampy.week.1 <- newData.lampy.week
+newData.lampy.week.1$week <- newData.lampy.week.1$week + 1/300  # small increment for derivative
+
+# Predict on the link scale
+pred0 <- predict(gam_lampy, newData.lampy.week, type = "link")
+pred1 <- predict(gam_lampy, newData.lampy.week.1, type = "link")
+
+# Build clean dataframe
+week.lampy.der <- data.frame(
+  week = week_seq,
+  pred0 = pred0,
+  pred1 = pred1
+)
+
+# Numerical derivative
+week.lampy.der$slope <- week.lampy.der$pred1 - week.lampy.der$pred0
+
+# Peak = point where slope switches from + to -
+peak_row <- week.lampy.der[which.max(week.lampy.der$pred0), ]
+peak_row
+
+#  multiple peaks, high error- nonsensical fit
+
+# Sequence of week values to explore
+week_seq <- seq(18, 35, length = 300)
+
+# Create new data frame holding everything constant except week
+newData.lampy.week <- data.frame(
+  dd.accum = 758,            # fixed degree days
+  TRAPS = 5,
+  week = week_seq,
+  weekly.precip = 15,
+  max.temp = 31,
+  min.temp = 14,
+  study = "New",
+  year=2017, #high year in New
+  TREAT_DESC = "Forage"
+)
+
+# Create same frame with week + 1 for numerical derivative
+newData.lampy.week.1 <- newData.lampy.week
+newData.lampy.week.1$week <- newData.lampy.week.1$week + 1/300  # small increment for derivative
+
+# Predict on the link scale
+pred0 <- predict(gam_lampy, newData.lampy.week, type = "link")
+pred1 <- predict(gam_lampy, newData.lampy.week.1, type = "link")
+
+# Build clean dataframe
+week.lampy.der <- data.frame(
+  week = week_seq,
+  pred0 = pred0,
+  pred1 = pred1
+)
+
+# Numerical derivative
+week.lampy.der$slope <- week.lampy.der$pred1 - week.lampy.der$pred0
+
+# Peak = point where slope switches from + to -
+peak_row <- week.lampy.der[which.max(week.lampy.der$pred0), ]
+peak_row
+
+#week    pred0    pred1        slope
+#174 27.83612 2.783217 2.783249 3.226584e-05
+
+
+##########code to compute similar pieces for other weather variables
+
+# Sequence of min.temp values to explore
+mint_seq <- seq(0, 20, length = 300)
+
+# Create new data frame holding everything constant except min.temp
+newData.lampy.mint <- data.frame(
+  dd.accum = 758,          # fixed degree days
+  TRAPS = 5,
+  week = 28,               # fixed week
+  weekly.precip = 15,
+  max.temp = 31,
+  min.temp = mint_seq,     # varying min.temp
+  study = "Hermann",
+  TREAT_DESC = "Forage"
+)
+
+# Create same frame with min.temp + small increment for numerical derivative
+newData.lampy.mint.1 <- newData.lampy.mint
+newData.lampy.mint.1$min.temp <- newData.lampy.mint.1$min.temp + 1/300  # small increment
+
+# Predict on the link scale
+pred0 <- predict(gam_lampy, newData.lampy.mint, type = "link")
+pred1 <- predict(gam_lampy, newData.lampy.mint.1, type = "link")
+
+# Build clean dataframe
+mint.lampy.der <- data.frame(
+  min.temp = mint_seq,
+  pred0 = pred0,
+  pred1 = pred1
+)
+
+# Numerical derivative
+mint.lampy.der$slope <- mint.lampy.der$pred1 - mint.lampy.der$pred0
+
+# Peak = point where slope switches from + to -
+peak_row <- mint.lampy.der[which.max(mint.lampy.der$pred0), ]
+peak_row
+
+#  min.temp   pred0    pred1         slope
+#217 14.44816 2.93519 2.935164 -2.514417e-05
+
+
+# Sequence of min.temp values to explore
+mint_seq <- seq(0, 20, length = 300)
+
+# Create new data frame holding everything constant except min.temp
+newData.lampy.mint <- data.frame(
+  dd.accum = 758,          # fixed degree days
+  TRAPS = 5,
+  week = 28,               # fixed week
+  weekly.precip = 15,
+  max.temp = 31,
+  min.temp = mint_seq,     # varying min.temp
+  study = "New",
+  TREAT_DESC = "Forage"
+)
+
+# Create same frame with min.temp + small increment for numerical derivative
+newData.lampy.mint.1 <- newData.lampy.mint
+newData.lampy.mint.1$min.temp <- newData.lampy.mint.1$min.temp + 1/300  # small increment
+
+# Predict on the link scale
+pred0 <- predict(gam_lampy, newData.lampy.mint, type = "link")
+pred1 <- predict(gam_lampy, newData.lampy.mint.1, type = "link")
+
+# Build clean dataframe
+mint.lampy.der <- data.frame(
+  min.temp = mint_seq,
+  pred0 = pred0,
+  pred1 = pred1
+)
+
+# Numerical derivative
+mint.lampy.der$slope <- mint.lampy.der$pred1 - mint.lampy.der$pred0
+
+# Peak = point where slope switches from + to -
+peak_row <- mint.lampy.der[which.max(mint.lampy.der$pred0), ]
+peak_row
+
+#min.temp    pred0   pred1       slope
+#300       20 4.112051 4.11425 0.002199302
+
+# Sequence of max.temp values to explore
+maxt_seq <- seq(25, 35, length = 300)
+
+# Create new data frame holding everything constant except max.temp
+newData.lampy.maxt <- data.frame(
+  dd.accum = 758,
+  TRAPS = 5,
+  week = 28,
+  weekly.precip = 15,
+  max.temp = maxt_seq,    # varying max.temp
+  min.temp = 14,
+  study = "Hermann",
+  TREAT_DESC = "Forage"
+)
+
+# Create same frame with max.temp + small increment for numerical derivative
+newData.lampy.maxt.1 <- newData.lampy.maxt
+newData.lampy.maxt.1$max.temp <- newData.lampy.maxt.1$max.temp + 1/300  # small increment
+
+# Predict on the link scale
+pred0 <- predict(gam_lampy, newData.lampy.maxt, type = "link")
+pred1 <- predict(gam_lampy, newData.lampy.maxt.1, type = "link")
+
+# Build clean dataframe
+maxt.lampy.der <- data.frame(
+  max.temp = maxt_seq,
+  pred0 = pred0,
+  pred1 = pred1
+)
+
+# Numerical derivative
+maxt.lampy.der$slope <- maxt.lampy.der$pred1 - maxt.lampy.der$pred0
+
+# Peak = point where slope switches from + to -
+peak_row <- maxt.lampy.der[which.max(maxt.lampy.der$pred0), ]
+peak_row
+
+
+#  max.temp    pred0    pred1        slope
+#235 32.82609 3.167134 3.167145 1.088545e-05
+
+# Sequence of max.temp values to explore
+maxt_seq <- seq(25, 35, length = 300)
+
+# Create new data frame holding everything constant except max.temp
+newData.lampy.maxt <- data.frame(
+  dd.accum = 758,
+  TRAPS = 5,
+  week = 28,
+  weekly.precip = 15,
+  max.temp = maxt_seq,    # varying max.temp
+  min.temp = 14,
+  study = "New",
+  TREAT_DESC = "Forage"
+)
+
+# Create same frame with max.temp + small increment for numerical derivative
+newData.lampy.maxt.1 <- newData.lampy.maxt
+newData.lampy.maxt.1$max.temp <- newData.lampy.maxt.1$max.temp + 1/300  # small increment
+
+# Predict on the link scale
+pred0 <- predict(gam_lampy, newData.lampy.maxt, type = "link")
+pred1 <- predict(gam_lampy, newData.lampy.maxt.1, type = "link")
+
+# Build clean dataframe
+maxt.lampy.der <- data.frame(
+  max.temp = maxt_seq,
+  pred0 = pred0,
+  pred1 = pred1
+)
+
+# Numerical derivative
+maxt.lampy.der$slope <- maxt.lampy.der$pred1 - maxt.lampy.der$pred0
+
+# Peak = point where slope switches from + to -
+peak_row <- maxt.lampy.der[which.max(maxt.lampy.der$pred0), ]
+peak_row
+
+#max.temp    pred0    pred1        slope
+#188 31.25418 2.201306 2.201307 1.360731e-06
+
+# Sequence of weekly.precip values
+precip_seq <- seq(0, 20, length = 300)
+
+# Create new data frame holding everything constant except weekly.precip
+newData.lampy.precip <- data.frame(
+  dd.accum = 758,
+  TRAPS = 5,
+  week = 28,
+  weekly.precip = precip_seq,    # varying precipitation
+  max.temp = 31,
+  min.temp = 14,
+  study = "Hermann",
+  TREAT_DESC = "Forage"
+)
+
+# Create same frame with small increment for numerical derivative
+newData.lampy.precip.1 <- newData.lampy.precip
+newData.lampy.precip.1$weekly.precip <- newData.lampy.precip.1$weekly.precip + 1/300  # small increment
+
+# Predict on the link scale
+pred0 <- predict(gam_lampy, newData.lampy.precip, type = "link")
+pred1 <- predict(gam_lampy, newData.lampy.precip.1, type = "link")
+
+# Build clean dataframe
+precip.lampy.der <- data.frame(
+  weekly.precip = precip_seq,
+  pred0 = pred0,
+  pred1 = pred1
+)
+
+# Numerical derivative
+precip.lampy.der$slope <- precip.lampy.der$pred1 - precip.lampy.der$pred0
+
+# Peak = point where slope switches from + to -
+peak_row <- precip.lampy.der[which.max(precip.lampy.der$pred0), ]
+peak_row
+
+# weekly.precip    pred0   pred1        slope
+#1     0 3.133279 3.13321 -6.90108e-05
+
+
+# Sequence of weekly.precip values
+precip_seq <- seq(0, 20, length = 300)
+
+# Create new data frame holding everything constant except weekly.precip
+newData.lampy.precip <- data.frame(
+  dd.accum = 758,
+  TRAPS = 5,
+  week = 28,
+  weekly.precip = precip_seq,    # varying precipitation
+  max.temp = 31,
+  min.temp = 14,
+  study = "New",
+  TREAT_DESC = "Forage"
+)
+
+# Create same frame with small increment for numerical derivative
+newData.lampy.precip.1 <- newData.lampy.precip
+newData.lampy.precip.1$weekly.precip <- newData.lampy.precip.1$weekly.precip + 1/300  # small increment
+
+# Predict on the link scale
+pred0 <- predict(gam_lampy, newData.lampy.precip, type = "link")
+pred1 <- predict(gam_lampy, newData.lampy.precip.1, type = "link")
+
+# Build clean dataframe
+precip.lampy.der <- data.frame(
+  weekly.precip = precip_seq,
+  pred0 = pred0,
+  pred1 = pred1
+)
+
+# Numerical derivative
+precip.lampy.der$slope <- precip.lampy.der$pred1 - precip.lampy.der$pred0
+
+# Peak = point where slope switches from + to -
+peak_row <- precip.lampy.der[which.max(precip.lampy.der$pred0), ]
+peak_row
+
+#  weekly.precip    pred0    pred1         slope
+#70      4.615385 2.279095 2.279095 -4.809917e-08
