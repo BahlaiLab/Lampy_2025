@@ -455,6 +455,19 @@ captures.by.year <- lampyrid.weather %>%
     .groups = "drop"
   )
 
+captures.by.study <- lampyrid.weather %>%
+  group_by(study) %>%
+  summarise(
+    total = sum(ADULTS, na.rm = TRUE),
+    traps = sum(TRAPS, na.rm = TRUE),
+    avg   = sum(ADULTS, na.rm = TRUE) / sum(TRAPS, na.rm = TRUE),
+    ddacc = max(dd.accum, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+
+
 captures.by.week.year <- lampyrid.weather %>%
   group_by(year, study, week) %>%
   summarise(
