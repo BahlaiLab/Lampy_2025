@@ -80,7 +80,7 @@ summary(lampyrid)
 #and the new survey data into 2 groups for comparative analysis
 #also a new variable to group data into 4 year chunks
 
-lampyrid$study<-as.factor(ifelse(lampyrid$year<=2015, "Hermann","New"))
+lampyrid$study<-as.factor(ifelse(lampyrid$year<=2015, "Baseline","New"))
 
 
 #also do TREAT_DESC while we're here
@@ -553,15 +553,15 @@ captures.by.treatment <- lampyrid.weather %>%
 #captures by treatment over the years
 
 # first we estimate the slope (+% decline for each of the study periods:
-hermann <- subset(captures.by.treatment, year <= 2015)
+Baseline <- subset(captures.by.treatment, year <= 2015)
 new <- subset(captures.by.treatment, year > 2015)
 
 #fit SLRs
 
-mod_hermann <- lm(avg ~ year, data = hermann)
+mod_Baseline <- lm(avg ~ year, data = Baseline)
 mod_new <- lm(avg ~ year, data = new)
 mod_all<-lm(avg ~ year, data = captures.by.treatment)
-summary(mod_hermann)
+summary(mod_Baseline)
 summary(mod_new)
 summary(mod_all)
 
@@ -723,6 +723,31 @@ library(ggpubr)
 library(Hmisc)
 library(cowplot)
 
+
+library(systemfonts)
+
+sf <- system_fonts()
+sf[grepl("Symbol", sf$family), c("family", "path")]
+
+
+
+library(showtext)
+
+#this is jenky but we need to do it to get the pictograms and have them BW
+font_add(
+  family = "notoemoji",
+  regular = "C:/Users/cbahlai/AppData/Local/Microsoft/Windows/Fonts/NotoEmoji-VariableFont_wght.ttf"
+)
+font_add(
+  family = "symbola",
+  regular = "C:/Users/cbahlai/AppData/Local/Microsoft/Windows/Fonts/Symbola.ttf"
+)
+
+
+showtext_auto()
+
+
+
 #pearson correlation of environmental parameters
 
 round(cor(lampyrid.weather[10:19], method="pearson"), digits=2)
@@ -764,9 +789,9 @@ withinyear.dd.lampy<-visreg(gam_lampy, "dd.accum", "study", partial=F, rug=FALSE
   annotate(
     "text",
     x = -Inf, y = Inf,       # top-left corner
-    label = "\U1F525",       # fire emoji
+    label = "\U0001F525",       # fire emoji
     hjust = -0.1, vjust = 1.3,
-    size = 8, family='emoji'
+    size = 8, family="notoemoji"
   )
 
 withinyear.dd.lampy
@@ -782,7 +807,7 @@ withinyear.week.lampy<-visreg(gam_lampy, "week", "study", partial=F, rug=FALSE,
               x = -Inf, y = Inf,       # top-left corner
               label = "\u2600",       # 
               hjust = -0.1, vjust = 1.3,
-              size = 8, family='emoji'
+              size = 8, family='notoemoji'
             )
 
 withinyear.week.lampy
@@ -798,7 +823,7 @@ withinyear.maxt.lampy<-visreg(gam_lampy, "max.temp", "study", partial=F, rug=FAL
     x = -Inf, y = Inf,       # top-left corner
     label = "\U1F321",       # 
     hjust = -0.1, vjust = 1.3,
-    size = 8, family='emoji'
+    size = 8, family='notoemoji'
   )
   
 
@@ -815,7 +840,7 @@ withinyear.mint.lampy<-visreg(gam_lampy, "min.temp", "study", partial=F, rug=FAL
     x = -Inf, y = Inf,       # top-left corner
     label = "\U1F321",       # 
     hjust = -0.1, vjust = 1.3,
-    size = 8, family='emoji'
+    size = 8, family='notoemoji'
   )
 
 withinyear.mint.lampy
@@ -831,7 +856,7 @@ withinyear.precip.lampy<-visreg(gam_lampy, "weekly.precip", "study", partial=F, 
   x = -Inf, y = Inf,       # top-left corner
   label = "\U1F327",       # 
   hjust = -0.1, vjust = 1.3,
-  size = 8, family='emoji'
+  size = 8, family='notoemoji'
 )
 
 withinyear.precip.lampy
@@ -876,7 +901,7 @@ withinyear.year.lampy <- ggplot(plot_data_trimmed,
               x = -Inf, y = Inf,       # top-left corner
               label = "\U1F4C5",       # 
               hjust = -0.1, vjust = 1.3,
-              size = 8, family='emoji'
+              size = 8, family='symbola'
             )
 
 
@@ -894,7 +919,7 @@ withinyear.habitat.lampy<-visreg(gam_lampy, "TREAT_DESC", "study", partial=F, ru
               x = -Inf, y = Inf,       # top-left corner
               label = "\U1F33F",       # 
               hjust = -0.1, vjust = 1.3,
-              size = 8, family='emoji'
+              size = 8, family='notoemoji'
             )
 
 
@@ -926,6 +951,7 @@ final_plot<-plot_grid(partresid, withinyear.modelplot.lampy, ncol=2, rel_widths 
 
 
 final_plot
+
 
 
 pdf("Figure2.pdf", height=8, width=8)
@@ -961,8 +987,8 @@ smooth_df_tidy <- smooth_df %>%
 # manually assign F-values from your anova output
 param_df_tidy <- data.frame(
   variable = "Habitat",
-  study = c("Hermann", "New"),
-  F_value = c(54.33, 13.39)   # TREAT_DESC for Hermann, TREAT_DESC:study for New
+  study = c("Baseline", "New"),
+  F_value = c(54.33, 13.39)   # TREAT_DESC for Baseline, TREAT_DESC:study for New
 )
 
 # ---- 3. Combine smooth + parametric ----
@@ -1019,7 +1045,7 @@ F_barplot_unicode <- ggplot(combined_df, aes(x = variable_label, y = F_value, fi
   geom_text(data = icon_positions, 
             aes(x = variable_label, y = y_pos, label = icon), 
             inherit.aes = FALSE, 
-            size = 8, family = "emoji") +  # adjust size to taste
+            size = 8, family = c("notoemoji","notoemoji","notoemoji","notoemoji","notoemoji","symbola", "notoemoji")) +  # adjust size to taste
   labs(x = "Predictor", y = "F value", fill = "Study") +
   scale_fill_manual(values = pal) +
   theme_classic(base_size = 14) +
@@ -1053,8 +1079,8 @@ newData.lampy.dd <- with(lampyrid.weather,
                                     weekly.precip=15, # not really important
                                     max.temp=31, #maxes near 31
                                     min.temp=14, #maxes near 12
-                                    study="Hermann",
-                                    year=2012, #high year in Hermann
+                                    study="Baseline",
+                                    year=2012, #high year in Baseline
                                     TREAT_DESC="Forage")) #most abundant in both time periods
 
 #make the same frame but for 1 more degday
@@ -1065,8 +1091,8 @@ newData.lampy.1.dd<- with(lampyrid.weather,
                                      weekly.precip=15, # not really important
                                      max.temp=31, #maxes near 31
                                      min.temp=14, #maxes near 12
-                                     study="Hermann",
-                                     year=2012, #high year in Hermann
+                                     study="Baseline",
+                                     year=2012, #high year in Baseline
                                      TREAT_DESC="Forage")) #most abundant in both time periods
 
 
@@ -1160,8 +1186,8 @@ newData.lampy.week <- data.frame(
   weekly.precip = 15,
   max.temp = 31,
   min.temp = 14,
-  study = "Hermann",
-  year=2012, #high year in Hermann
+  study = "Baseline",
+  year=2012, #high year in Baseline
   TREAT_DESC = "Forage"
 )
 
@@ -1244,7 +1270,7 @@ newData.lampy.mint <- data.frame(
   weekly.precip = 15,
   max.temp = 31,
   min.temp = mint_seq,     # varying min.temp
-  study = "Hermann",
+  study = "Baseline",
   TREAT_DESC = "Forage"
 )
 
@@ -1325,7 +1351,7 @@ newData.lampy.maxt <- data.frame(
   weekly.precip = 15,
   max.temp = maxt_seq,    # varying max.temp
   min.temp = 14,
-  study = "Hermann",
+  study = "Baseline",
   TREAT_DESC = "Forage"
 )
 
@@ -1406,7 +1432,7 @@ newData.lampy.precip <- data.frame(
   weekly.precip = precip_seq,    # varying precipitation
   max.temp = 31,
   min.temp = 14,
-  study = "Hermann",
+  study = "Baseline",
   TREAT_DESC = "Forage"
 )
 
